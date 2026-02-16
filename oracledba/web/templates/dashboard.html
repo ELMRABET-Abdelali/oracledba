@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - OracleDBA{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+            <p class="text-muted">System Overview and Health Status</p>
+        </div>
+    </div>
+
+    <!-- Status Cards -->
+    <div class="row">
+        <!-- Oracle Installation -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-box text-primary"></i> Oracle Installation
+                    </h5>
+                    <h3 id="oracle-status">
+                        {% if status.checks.oracle_installed %}
+                            <span class="status-badge status-running">Installed</span>
+                        {% else %}
+                            <span class="status-badge status-stopped">Not Found</span>
+                        {% endif %}
+                    </h3>
+                    <small class="text-muted" id="oracle-home">{{ status.oracle_home }}</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Database Status -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-database text-success"></i> Database
+                    </h5>
+                    <h3 id="database-status">
+                        {% if status.checks.database_running %}
+                            <span class="status-badge status-running">Running</span>
+                        {% else %}
+                            <span class="status-badge status-stopped">Stopped</span>
+                        {% endif %}
+                    </h3>
+                    <small class="text-muted">PMON Process</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Listener Status -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-network-wired text-info"></i> Listener
+                    </h5>
+                    <h3 id="listener-status">
+                        {% if status.checks.listener_running %}
+                            <span class="status-badge status-running">Running</span>
+                        {% else %}
+                            <span class="status-badge status-stopped">Stopped</span>
+                        {% endif %}
+                    </h3>
+                    <small class="text-muted">TNSLSNR Process</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cluster Status -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-server text-warning"></i> Cluster
+                    </h5>
+                    <h3 id="cluster-status">
+                        {% if status.checks.cluster_configured %}
+                            <span class="status-badge status-running">Configured</span>
+                        {% else %}
+                            <span class="status-badge status-unknown">Not Configured</span>
+                        {% endif %}
+                    </h3>
+                    <small class="text-muted">RAC / NFS</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Information -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i> System Information
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th width="40%">Hostname</th>
+                                <td>{{ status.hostname }}</td>
+                            </tr>
+                            <tr>
+                                <th>Oracle Home</th>
+                                <td><code>{{ status.oracle_home }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>Last Update</th>
+                                <td id="last-update">{{ status.timestamp }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <button class="btn btn-primary btn-sm" onclick="refreshStatus()">
+                        <i class="fas fa-sync-alt"></i> Refresh Status
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-bolt"></i> Quick Actions
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('sample') }}" class="btn btn-success">
+                            <i class="fas fa-flask"></i> Create Sample Database
+                        </a>
+                        <a href="{{ url_for('databases') }}" class="btn btn-primary">
+                            <i class="fas fa-database"></i> Manage Databases
+                        </a>
+                        <a href="{{ url_for('protection') }}" class="btn btn-warning">
+                            <i class="fas fa-shield-alt"></i> Configure Protection
+                        </a>
+                        <a href="{{ url_for('terminal') }}" class="btn btn-dark">
+                            <i class="fas fa-terminal"></i> Open Terminal
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-history"></i> Features Overview
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-shield-alt"></i> Data Protection</h6>
+                            <ul class="list-unstyled">
+                                <li>✓ ARCHIVELOG Mode</li>
+                                <li>✓ Fast Recovery Area</li>
+                                <li>✓ RMAN Backup</li>
+                                <li>✓ Flashback Database</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-lock"></i> Security</h6>
+                            <ul class="list-unstyled">
+                                <li>✓ User Management</li>
+                                <li>✓ Privilege Control</li>
+                                <li>✓ Password Policies</li>
+                                <li>✓ Audit Configuration</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-server"></i> High Availability</h6>
+                            <ul class="list-unstyled">
+                                <li>✓ Data Guard</li>
+                                <li>✓ Listener Config</li>
+                                <li>✓ RAC Cluster</li>
+                                <li>✓ ASM Storage</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-refresh status every 30 seconds
+    setInterval(refreshStatus, 30000);
+    
+    async function refreshStatus() {
+        const result = await apiCall('/api/system-status');
+        
+        if (result.checks) {
+            // Update Oracle Status
+            updateStatus('oracle-status', result.checks.oracle_installed, 'Installed', 'Not Found');
+            
+            // Update Database Status
+            updateStatus('database-status', result.checks.database_running, 'Running', 'Stopped');
+            
+            // Update Listener Status
+            updateStatus('listener-status', result.checks.listener_running, 'Running', 'Stopped');
+            
+            // Update Cluster Status
+            updateStatus('cluster-status', result.checks.cluster_configured, 'Configured', 'Not Configured');
+            
+            // Update timestamp
+            document.getElementById('last-update').textContent = formatTimestamp(result.timestamp);
+        }
+    }
+    
+    function updateStatus(elementId, condition, trueText, falseText) {
+        const element = document.getElementById(elementId);
+        const statusClass = condition ? 'status-running' : 'status-stopped';
+        const text = condition ? trueText : falseText;
+        element.innerHTML = `<span class="status-badge ${statusClass}">${text}</span>`;
+    }
+</script>
+{% endblock %}

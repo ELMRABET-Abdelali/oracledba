@@ -110,6 +110,28 @@ def install_database(config, name):
     mgr.create_database(name)
 
 
+@install.command('gui')
+@click.option('--port', default=5000, help='Web server port (default: 5000)')
+@click.option('--host', default='0.0.0.0', help='Web server host (default: 0.0.0.0)')
+@click.option('--debug', is_flag=True, help='Enable debug mode')
+def install_gui(port, host, debug):
+    """🌐 Start Web GUI Management Console"""
+    try:
+        from .web_server import start_gui_server
+        console.print("\n[bold green]Starting OracleDBA Web GUI...[/bold green]\n")
+        console.print(f"[cyan]Access the web interface at:[/cyan] [bold]http://{host}:{port}[/bold]")
+        console.print("[yellow]Default credentials: admin / admin123[/yellow]")
+        console.print("[dim]Press Ctrl+C to stop the server[/dim]\n")
+        start_gui_server(port=port, host=host, debug=debug)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped[/yellow]")
+    except ImportError as e:
+        console.print(f"\n[red]Error: Missing dependencies for web GUI[/red]")
+        console.print("[yellow]Install with:[/yellow] [cyan]pip install flask flask-cors[/cyan]\n")
+    except Exception as e:
+        console.print(f"\n[red]Error starting web server:[/red] {str(e)}\n")
+
+
 # ============================================================================
 # PRE-INSTALLATION CHECK
 # ============================================================================

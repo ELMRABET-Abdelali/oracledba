@@ -778,5 +778,119 @@ def vm_init(role, node_number):
     mgr.vm_init(role, node_number)
 
 
+# ============================================================================
+# CLUSTER MANAGEMENT
+# ============================================================================
+
+@main.group()
+def cluster():
+    """🖧  Manage multi-node Oracle cluster"""
+    pass
+
+
+@cluster.command('add-node')
+@click.option('--name', required=True, help='Node name (e.g., node1, node2)')
+@click.option('--ip', required=True, help='IP address')
+@click.option('--role', type=click.Choice(['database', 'nfs', 'grid', 'standby']), default='database', help='Node role')
+@click.option('--ssh-key', help='Path to SSH private key')
+@click.option('--ssh-user', default='root', help='SSH username')
+@click.option('--sid', help='Oracle SID for database nodes')
+def cluster_add_node(name, ip, role, ssh_key, ssh_user, sid):
+    """Add a node to the cluster"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    mgr.add_node(name, ip, role, ssh_key, ssh_user, sid)
+
+
+@cluster.command('remove-node')
+@click.argument('name')
+@click.option('--force', is_flag=True, help='Skip confirmation')
+def cluster_remove_node(name, force):
+    """Remove a node from the cluster"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    mgr.remove_node(name, force)
+
+
+@cluster.command('list')
+@click.option('--role', type=click.Choice(['database', 'nfs', 'grid', 'standby']), help='Filter by role')
+def cluster_list(role):
+    """List all nodes in the cluster"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    mgr.list_nodes(role)
+
+
+@cluster.command('show')
+@click.argument('name')
+def cluster_show(name):
+    """Show detailed information about a node"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    mgr.show_node(name)
+
+
+@cluster.command('add-nfs')
+@click.option('--name', required=True, help='NFS server name')
+@click.option('--ip', required=True, help='IP address')
+@click.option('--exports', required=True, help='Export paths (comma-separated, e.g., /nfs/backup,/nfs/fra)')
+@click.option('--ssh-key', help='Path to SSH private key')
+def cluster_add_nfs(name, ip, exports, ssh_key):
+    """Add NFS server to the cluster"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    export_paths = [p.strip() for p in exports.split(',')]
+    mgr.add_nfs_server(name, ip, export_paths, ssh_key)
+
+
+@cluster.command('mount-nfs')
+@click.option('--node', required=True, help='Database node name')
+@click.option('--nfs-server', required=True, help='NFS server name')
+@click.option('--remote-path', required=True, help='Remote path on NFS (e.g., /nfs/backup)')
+@click.option('--mount-point', required=True, help='Local mount point (e.g., /backup)')
+def cluster_mount_nfs(node, nfs_server, remote_path, mount_point):
+    """Configure NFS mount between node and NFS server"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    mgr.mount_nfs(node, nfs_server, remote_path, mount_point)
+
+
+@cluster.command('deploy')
+@click.argument('node_name')
+def cluster_deploy(node_name):
+    """Deploy OracleDBA package on a node"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    mgr.deploy_oracledba(node_name)
+
+
+@cluster.command('ssh')
+@click.argument('node_name')
+@click.argument('command', nargs=-1, required=True)
+def cluster_ssh(node_name, command):
+    """Execute command on a node via SSH"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    cmd = ' '.join(command)
+    exit_code, stdout, stderr = mgr.ssh_exec(node_name, cmd)
+    
+    if stdout:
+        console.print(stdout)
+    if stderr:
+        console.print(f"[red]{stderr}[/red]", style="bold")
+    
+    sys.exit(exit_code)
+
+
+@cluster.command('export')
+@click.option('--format', type=click.Choice(['yaml', 'ansible', 'terraform']), default='yaml', help='Export format')
+def cluster_export(format):
+    """Export cluster inventory"""
+    from .modules.cluster import ClusterManager
+    mgr = ClusterManager()
+    output_file = mgr.export_inventory(format)
+    console.print(f"\n[green]✓[/green] Inventory exported: {output_file}")
+
+
 if __name__ == '__main__':
     main()

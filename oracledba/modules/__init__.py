@@ -12,6 +12,7 @@ from . import flashback
 from . import security
 from . import nfs
 from . import database
+from . import cluster
 
 __all__ = [
     'install',
@@ -25,4 +26,5 @@ __all__ = [
     'security',
     'nfs',
     'database',
+    'cluster',
 ]

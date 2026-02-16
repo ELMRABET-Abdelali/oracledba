@@ -191,7 +191,7 @@ def generate_response_file(template_name, config=None, output_file=None):
         output_file: Output file path (optional)
     
     Returns:
-        Generated response file content
+        Tuple: (content, actual_output_file) if output_file specified, else just content
     """
     from jinja2 import Template
     
@@ -216,9 +216,43 @@ def generate_response_file(template_name, config=None, output_file=None):
     
     # Write to file if specified
     if output_file:
-        with open(output_file, 'w') as f:
-            f.write(content)
+        import os
+        from pathlib import Path
+        
+        output_path = Path(output_file)
+        
+        # Auto-cleanup: Remove existing file if it has wrong permissions
+        if output_path.exists():
+            try:
+                # Try to remove it (handles permission issues)
+                output_path.unlink()
+            except PermissionError:
+                # File owned by another user, try with sudo or use different name
+                import getpass
+                import time
+                username = getpass.getuser()
+                pid = os.getpid()
+                timestamp = int(time.time())
+                
+                # Create unique filename
+                output_file = str(output_path.parent / f"{output_path.stem}_{username}_{pid}_{timestamp}{output_path.suffix}")
+                output_path = Path(output_file)
+        
+        try:
+            with open(output_file, 'w') as f:
+                f.write(content)
+        except PermissionError as e:
+            # Last resort: write to user's home directory
+            home_dir = Path.home()
+            fallback_file = home_dir / output_path.name
+            with open(fallback_file, 'w') as f:
+                f.write(content)
+            # Update the output_file reference
+            output_file = str(fallback_file)
     
+    # Return tuple if file was written, otherwise just content
+    if output_file:
+        return (content, output_file)
     return content
 
 
@@ -250,29 +284,29 @@ def generate_all_response_files(config_file=None, output_dir='/tmp'):
     
     # DB Install
     db_install_file = output_dir / 'db_install.rsp'
-    generate_response_file(
+    _, actual_file = generate_response_file(
         'DB_INSTALL',
         config.get('oracle', {}),
         str(db_install_file)
     )
-    files['db_install'] = str(db_install_file)
+    files['db_install'] = actual_file
     
     # DBCA
     dbca_file = output_dir / 'dbca.rsp'
-    generate_response_file(
+    _, actual_file = generate_response_file(
         'DBCA',
         config.get('database', {}),
         str(dbca_file)
     )
-    files['dbca'] = str(dbca_file)
+    files['dbca'] = actual_file
     
     # NETCA
     netca_file = output_dir / 'netca.rsp'
-    generate_response_file(
+    _, actual_file = generate_response_file(
         'NETCA',
         config.get('network', {}),
         str(netca_file)
     )
-    files['netca'] = str(netca_file)
+    files['netca'] = actual_file
     
     return files

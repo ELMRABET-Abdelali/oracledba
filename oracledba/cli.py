@@ -221,8 +221,8 @@ def genrsp_db(config, output):
         with open(config) as f:
             cfg = yaml.safe_load(f).get('oracle', {})
     
-    generate_response_file('DB_INSTALL', cfg, output)
-    console.print(f"[green]✓[/green] Generated: {output}")
+    _, actual_file = generate_response_file('DB_INSTALL', cfg, output)
+    console.print(f"[green]✓[/green] Generated: {actual_file}")
 
 
 @genrsp.command('dbca')
@@ -238,8 +238,8 @@ def genrsp_dbca(config, output):
         with open(config) as f:
             cfg = yaml.safe_load(f).get('database', {})
     
-    generate_response_file('DBCA', cfg, output)
-    console.print(f"[green]✓[/green] Generated: {output}")
+    _, actual_file = generate_response_file('DBCA', cfg, output)
+    console.print(f"[green]✓[/green] Generated: {actual_file}")
 
 
 # ============================================================================

@@ -124,6 +124,19 @@ print_info "Installing OracleDBA package..."
 python3.9 -m pip install . --no-cache-dir --quiet
 print_success "Package installed"
 
+# Step 7.5: Create log directory
+print_info "Creating log directory..."
+if [ "$INSTALL_USER" = "root" ]; then
+    # System-wide installation
+    mkdir -p /var/log/oracledba
+    chmod 777 /var/log/oracledba
+    print_success "Log directory created: /var/log/oracledba"
+else
+    # User installation - logs go to home
+    mkdir -p "$HOME/.local/share/oracledba/logs"
+    print_success "Log directory created: $HOME/.local/share/oracledba/logs"
+fi
+
 # Step 8: Configure PATH
 print_info "Configuring PATH..."
 if [ "$INSTALL_USER" = "root" ]; then

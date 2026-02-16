@@ -111,6 +111,138 @@ def install_database(config, name):
 
 
 # ============================================================================
+# PRE-INSTALLATION CHECK
+# ============================================================================
+
+@main.command('precheck')
+@click.option('--fix', is_flag=True, help='Generate fix script')
+def precheck(fix):
+    """🔍 Check system requirements before installation"""
+    from .modules.precheck import PreInstallChecker
+    checker = PreInstallChecker()
+    result = checker.check_all()
+    
+    if fix or not result:
+        checker.generate_fix_script()
+        console.print("\n[cyan]Run:[/cyan] sudo bash fix-precheck-issues.sh")
+
+
+# ============================================================================
+# TESTING COMMANDS
+# ============================================================================
+
+@main.command('test')
+@click.option('--oracle-home', help='ORACLE_HOME path')
+@click.option('--oracle-sid', help='ORACLE_SID name')
+@click.option('--report', is_flag=True, help='Generate detailed report')
+def test(oracle_home, oracle_sid, report):
+    """🧪 Test Oracle installation"""
+    from .modules.testing import OracleTestSuite
+    tester = OracleTestSuite(oracle_home, oracle_sid)
+    result = tester.run_all_tests()
+    
+    if report:
+        tester.generate_test_report()
+
+
+# ============================================================================
+# DOWNLOAD ORACLE SOFTWARE
+# ============================================================================
+
+@main.group()
+def download():
+    """📥 Download Oracle software"""
+    pass
+
+
+@download.command('database')
+@click.option('--url', help='Custom download URL')
+@click.option('--dir', default='/opt/oracle/install', help='Download directory')
+def download_database(url, dir):
+    """Download Oracle 19c Database software"""
+    from .modules.downloader import OracleDownloader
+    downloader = OracleDownloader(dir)
+    downloader.download_oracle_19c('database', url)
+
+
+@download.command('grid')
+@click.option('--url', help='Custom download URL')
+@click.option('--dir', default='/opt/oracle/install', help='Download directory')
+def download_grid(url, dir):
+    """Download Oracle Grid Infrastructure software"""
+    from .modules.downloader import OracleDownloader
+    downloader = OracleDownloader(dir)
+    downloader.download_oracle_19c('grid', url)
+
+
+@download.command('extract')
+@click.argument('zip-file')
+@click.option('--to', 'extract_to', help='Extract to directory (ORACLE_HOME)')
+def download_extract(zip_file, extract_to):
+    """Extract Oracle ZIP file"""
+    from .modules.downloader import OracleDownloader
+    downloader = OracleDownloader()
+    downloader.extract_oracle_zip(zip_file, extract_to)
+
+
+# ============================================================================
+# RESPONSE FILE GENERATION
+# ============================================================================
+
+@main.group()
+def genrsp():
+    """📝 Generate Oracle response files"""
+    pass
+
+
+@genrsp.command('all')
+@click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
+@click.option('--output-dir', default='/tmp', help='Output directory')
+def genrsp_all(config, output_dir):
+    """Generate all response files (DB, DBCA, NETCA)"""
+    from .modules.response_files import generate_all_response_files
+    files = generate_all_response_files(config, output_dir)
+    
+    console.print("\n[green]✓[/green] Response files generated:")
+    for name, path in files.items():
+        console.print(f"  • {name}: {path}")
+
+
+@genrsp.command('db-install')
+@click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
+@click.option('--output', default='/tmp/db_install.rsp', help='Output file')
+def genrsp_db(config, output):
+    """Generate DB installation response file"""
+    from .modules.response_files import generate_response_file
+    import yaml
+    
+    cfg = {}
+    if config:
+        with open(config) as f:
+            cfg = yaml.safe_load(f).get('oracle', {})
+    
+    generate_response_file('DB_INSTALL', cfg, output)
+    console.print(f"[green]✓[/green] Generated: {output}")
+
+
+@genrsp.command('dbca')
+@click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
+@click.option('--output', default='/tmp/dbca.rsp', help='Output file')
+def genrsp_dbca(config, output):
+    """Generate DBCA response file"""
+    from .modules.response_files import generate_response_file
+    import yaml
+    
+    cfg = {}
+    if config:
+        with open(config) as f:
+            cfg = yaml.safe_load(f).get('database', {})
+    
+    generate_response_file('DBCA', cfg, output)
+    console.print(f"[green]✓[/green] Generated: {output}")
+
+
+# ============================================================================
 # RMAN COMMANDS
 # ============================================================================
 

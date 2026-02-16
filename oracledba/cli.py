@@ -892,5 +892,227 @@ def cluster_export(format):
     console.print(f"\n[green]✓[/green] Inventory exported: {output_file}")
 
 
+# ============================================================================
+# SAMPLE DATABASE COMMANDS
+# ============================================================================
+
+@main.group()
+def sample():
+    """🧪 Sample database for testing and learning"""
+    pass
+
+
+@sample.command('create')
+@click.option('--name', default='SAMPLEDB', help='Sample database name')
+def sample_create(name):
+    """Create fully configured sample database with test data"""
+    from .modules.sample import SampleDatabaseGenerator
+    console.print("[bold cyan]Creating sample database...[/bold cyan]")
+    console.print("[dim]This includes: tables, data, indexes, security, backups, flashback[/dim]\n")
+    
+    generator = SampleDatabaseGenerator(name)
+    success = generator.run_full_setup()
+    
+    if success:
+        console.print("\n[bold green]✓ Sample database ready![/bold green]")
+        console.print("\n[cyan]Try these commands:[/cyan]")
+        console.print("  oradba sample status       # View configuration")
+        console.print("  oradba sample test         # Test all features")
+        console.print("  oradba sample connect      # Get connection string")
+    else:
+        console.print("\n[bold red]✗ Sample database creation failed[/bold red]")
+        sys.exit(1)
+
+
+@sample.command('status')
+@click.option('--name', default='SAMPLEDB', help='Sample database name')
+def sample_status(name):
+    """Show sample database configuration and statistics"""
+    from .modules.sample import SampleDatabaseGenerator
+    generator = SampleDatabaseGenerator(name)
+    generator.show_status()
+
+
+@sample.command('test')
+@click.option('--name', default='SAMPLEDB', help='Sample database name')
+@click.option('--feature', help='Test specific feature (archivelog, rman, flashback, security)')
+def sample_test(name, feature):
+    """Test sample database features"""
+    console.print(f"\n[bold cyan]Testing sample database: {name}[/bold cyan]\n")
+    
+    tests = {
+        'connection': {
+            'name': 'Database Connection',
+            'sql': "SELECT 'Connected to ' || instance_name FROM v$instance;"
+        },
+        'archivelog': {
+            'name': 'Archive Log Mode',
+            'sql': "SELECT log_mode FROM v$database;"
+        },
+        'fra': {
+            'name': 'Fast Recovery Area',
+            'sql': "SELECT name, value FROM v$parameter WHERE name LIKE '%recovery_file_dest%';"
+        },
+        'controlfiles': {
+            'name': 'Control File Multiplexing',
+            'sql': "SELECT COUNT(*) as multiplexed_copies FROM v$controlfile;"
+        },
+        'redologs': {
+            'name': 'Redo Log Multiplexing',
+            'sql': "SELECT group#, COUNT(*) as members FROM v$logfile GROUP BY group#;"
+        },
+        'flashback': {
+            'name': 'Flashback Database',
+            'sql': "SELECT flashback_on FROM v$database;"
+        },
+        'sample_data': {
+            'name': 'Sample Data',
+            'sql': "SELECT 'Customers: ' || COUNT(*) FROM sample_user.customers UNION ALL SELECT 'Orders: ' || COUNT(*) FROM sample_user.orders;"
+        },
+        'security': {
+            'name': 'Security Profile',
+            'sql': "SELECT username, profile FROM dba_users WHERE username = 'SAMPLE_USER';"
+        }
+    }
+    
+    if feature:
+        if feature not in tests:
+            console.print(f"[red]Unknown feature: {feature}[/red]")
+            console.print("[yellow]Available:[/yellow] " + ", ".join(tests.keys()))
+            sys.exit(1)
+        tests_to_run = {feature: tests[feature]}
+    else:
+        tests_to_run = tests
+    
+    all_passed = True
+    for test_id, test_info in tests_to_run.items():
+        console.print(f"[cyan]Testing:[/cyan] {test_info['name']}")
+        
+        # Execute test SQL
+        import subprocess
+        import tempfile
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False) as f:
+            f.write(f"SET FEEDBACK OFF\n")
+            f.write(f"SET HEADING OFF\n")
+            f.write(f"{test_info['sql']}\n")
+            f.write("EXIT;\n")
+            sql_file = f.name
+        
+        try:
+            result = subprocess.run(
+                ['sqlplus', '-S', '/', 'as', 'sysdba', f'@{sql_file}'],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                console.print(f"  [green]✓ PASS[/green] - {result.stdout.strip()}")
+            else:
+                console.print(f"  [red]✗ FAIL[/red]")
+                all_passed = False
+        except Exception as e:
+            console.print(f"  [red]✗ ERROR:[/red] {e}")
+            all_passed = False
+        finally:
+            os.unlink(sql_file)
+    
+    if all_passed:
+        console.print("\n[bold green]✓ All tests passed![/bold green]")
+    else:
+        console.print("\n[bold red]✗ Some tests failed[/bold red]")
+        sys.exit(1)
+
+
+@sample.command('connect')
+@click.option('--name', default='SAMPLEDB', help='Sample database name')
+@click.option('--user', default='sample_user', help='User name')
+def sample_connect(name, user):
+    """Show connection string for sample database"""
+    console.print(f"\n[bold cyan]Sample Database Connection Info[/bold cyan]\n")
+    
+    console.print("[yellow]SQL*Plus:[/yellow]")
+    console.print(f"  sqlplus {user}/SamplePass123@{name}")
+    
+    console.print("\n[yellow]JDBC:[/yellow]")
+    console.print(f"  jdbc:oracle:thin:@localhost:1521:{name}")
+    
+    console.print("\n[yellow]Python (cx_Oracle):[/yellow]")
+    console.print(f"  cx_Oracle.connect('{user}', 'SamplePass123', 'localhost:1521/{name}')")
+    
+    console.print("\n[yellow]TNS:[/yellow]")
+    console.print(f"  {name} = (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME={name})))\n")
+
+
+@sample.command('remove')
+@click.option('--name', default='SAMPLEDB', help='Sample database name')
+@click.option('--force', is_flag=True, help='Skip confirmation')
+def sample_remove(name, force):
+    """Remove sample database and all data"""
+    if not force:
+        console.print(f"\n[bold red]WARNING:[/bold red] This will DELETE sample database '{name}' and ALL DATA")
+        confirm = input("Type 'yes' to confirm: ")
+        if confirm != 'yes':
+            console.print("[yellow]Cancelled[/yellow]")
+            return
+    
+    from .modules.sample import SampleDatabaseGenerator
+    generator = SampleDatabaseGenerator(name)
+    success = generator.cleanup()
+    
+    if success:
+        console.print(f"\n[green]✓ Sample database '{name}' removed[/green]")
+    else:
+        console.print(f"\n[red]✗ Failed to remove sample database[/red]")
+        sys.exit(1)
+
+
+# ============================================================================
+# ENHANCED HELP SYSTEM
+# ============================================================================
+
+@main.group()
+def help():
+    """📚 Comprehensive help and documentation"""
+    pass
+
+
+@help.command('features')
+def help_features():
+    """List all Oracle features with descriptions"""
+    from .modules.help_system import show_all_features
+    show_all_features()
+
+
+@help.command('feature')
+@click.argument('feature_name')
+def help_feature(feature_name):
+    """Show detailed help for specific feature"""
+    from .modules.help_system import show_feature_detail
+    show_feature_detail(feature_name)
+
+
+@help.command('workflow')
+def help_workflow():
+    """Show recommended production setup workflow"""
+    from .modules.help_system import show_workflow_guide
+    show_workflow_guide()
+
+
+@help.command('search')
+@click.argument('keyword')
+def help_search(keyword):
+    """Search features by keyword"""
+    from .modules.help_system import search_features
+    search_features(keyword)
+
+
+@help.command('quick')
+def help_quick():
+    """Quick command reference (one-liners)"""
+    from .modules.help_system import show_quick_reference
+    show_quick_reference()
+
+
 if __name__ == '__main__':
     main()

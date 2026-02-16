@@ -13,6 +13,8 @@ from . import security
 from . import nfs
 from . import database
 from . import cluster
+from . import sample
+from . import help_system
 
 __all__ = [
     'install',
@@ -27,4 +29,6 @@ __all__ = [
     'nfs',
     'database',
     'cluster',
+    'sample',
+    'help_system',
 ]

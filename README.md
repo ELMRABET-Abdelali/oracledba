@@ -26,6 +26,34 @@ Ce package est construit sur **15 scripts shell testés et approuvés** (TP01-TP
 - 📊 **Flashback** - Technologies de récupération
 - 🤖 **AI/ML** - Oracle Machine Learning
 - 🌐 **NFS Setup** - Configuration serveur NFS pour RAC
+- 🌐 **Web GUI** - Interface web complète pour toutes les opérations (NOUVEAU!)
+
+### 🌐 Interface Web (NEW!)
+
+**Gérez votre base Oracle depuis votre navigateur!**
+
+```bash
+# Installer les dépendances web
+pip install -r requirements-gui.txt
+
+# Démarrer l'interface web
+oradba install gui
+
+# Accéder dans votre navigateur
+http://localhost:5000
+```
+
+**Fonctionnalités Web GUI:**
+- ✅ Dashboard temps réel (statut Oracle, Database, Listener, Cluster)
+- ✅ Gestion bases de données (création, configuration)
+- ✅ Gestion stockage (tablespaces, control files, redo logs)
+- ✅ Protection données (ARCHIVELOG, FRA, RMAN, Flashback)
+- ✅ Sécurité (users, privilèges, profiles, audit)
+- ✅ Gestion cluster (RAC, ASM, NFS, SSH)
+- ✅ Base de données exemple (6000+ lignes, toutes fonctionnalités)
+- ✅ Terminal interactif (exécution commandes CLI)
+
+📖 **Voir [WEB_GUI_GUIDE.md](WEB_GUI_GUIDE.md) et [QUICKSTART.md](QUICKSTART.md) pour plus de détails**
 
 ### 📦 15 TPs (Travaux Pratiques) Intégrés
 
@@ -420,6 +448,52 @@ docker run -it --name oracle19c oracledba:latest
 docker-compose up -d
 ```
 
+## 📚 Documentation
+
+Pour bien démarrer, consultez ces guides dans l'ordre:
+
+### Getting Started
+- **[FIRST_TIME_USER_GUIDE.md](FIRST_TIME_USER_GUIDE.md)** - Guide complet pour premiers utilisateurs (3 learning paths)
+- **[QUICKSTART.md](QUICKSTART.md)** - Démarrage rapide en 5 minutes
+
+### Web GUI Documentation
+- **[WEB_GUI_GUIDE.md](WEB_GUI_GUIDE.md)** - Guide complet d'utilisation de l'interface web
+- **[WEB_GUI_IMPLEMENTATION.md](WEB_GUI_IMPLEMENTATION.md)** - Documentation technique de l'implémentation
+
+### Technical Documentation
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Architecture complète du système avec diagrammes visuels
+- **[SESSION_COMPLETE_SUMMARY.md](SESSION_COMPLETE_SUMMARY.md)** - Résumé complet des fonctionnalités implémentées
+- **[FEATURES_GUIDE.md](FEATURES_GUIDE.md)** - Guide des 40+ fonctionnalités Oracle DBA
+
+### Practical Exercises (Travaux Pratiques)
+Les guides TP (Travaux Pratiques) se trouvent dans le dossier `dba-story-tps/`:
+- **TP01-System-Readiness.md** - Préparation système
+- **TP02-Installation-Binaire.md** - Installation Oracle
+- **TP03-Creation-Instance.md** - Création d'instance
+- **TP04-Fichiers-Critiques.md** - Multiplexage
+- **TP05-Gestion-Stockage.md** - Tablespaces
+- **TP06-Securite-Acces.md** - Sécurité
+- **TP07-Flashback.md** - Flashback
+- **TP08-RMAN.md** - Sauvegardes
+- **TP09-Data-Guard.md** - Standby
+- **TP10-Tuning.md** - Performance
+- **TP11-Patching.md** - Patching
+- **TP12-Multi-tenant.md** - CDB/PDB
+- **TP13-AI-Foundations.md** - Intelligence artificielle
+- **TP14-Mobilite-Concurrence.md** - Data Pump
+- **TP15-ASM-RAC-Concepts.md** - Cluster
+
+### Architecture et Concepts
+Consultez [ARCHITECTURE.md](ARCHITECTURE.md) pour:
+- Diagrammes d'architecture système
+- Flux de données (CLI vs Web GUI)
+- Structure des modules
+- Cartes de couverture des fonctionnalités
+- Options de déploiement
+- Stack technologique
+
+---
+
 ## 🧪 Tests
 
 ```bash
@@ -465,12 +539,28 @@ Ce projet est sous licence MIT. Voir [LICENSE](LICENSE) pour plus de détails.
 
 ## 📈 Roadmap
 
+### Completed ✅
+- [x] Interface web complète avec authentification
+- [x] 60+ commandes CLI pour administration Oracle
+- [x] Sample database avec 40+ fonctionnalités
+- [x] Documentation complète (2000+ lignes)
+- [x] 15 exercices pratiques (TP)
+
+### In Progress 🚧
+- [ ] Tests unitaires et d'intégration
+- [ ] CI/CD avec GitHub Actions
+
+### Planned 📋
 - [ ] Support pour Oracle 21c
-- [ ] Interface web de monitoring
-- [ ] Support Kubernetes
-- [ ] Ansible playbooks
-- [ ] Terraform modules
+- [ ] Monitoring en temps réel avec WebSocket
+- [ ] Support Kubernetes (Operator pattern)
+- [ ] Ansible playbooks pour déploiement
+- [ ] Terraform modules pour infrastructure
 - [ ] Support multi-cloud (AWS RDS, Azure, GCP)
+- [ ] Interface mobile (Progressive Web App)
+- [ ] Graphiques de performance interactifs
+- [ ] Notifications par email/Slack
+- [ ] Mode sombre (Dark mode)
 
 ---
 

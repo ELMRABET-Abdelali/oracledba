@@ -9,16 +9,18 @@ import sys
 import json
 import subprocess
 import hashlib
+import hmac
+import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
-import secrets
 
-# Import our CLI modules
+# Import our CLI modules and system detector
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from oracledba.modules.system_detector import SystemDetector
 
 app = Flask(__name__, 
            template_folder='web/templates',
@@ -31,13 +33,40 @@ CONFIG_DIR = Path.home() / '.oracledba'
 CONFIG_FILE = CONFIG_DIR / 'gui_config.json'
 USERS_FILE = CONFIG_DIR / 'gui_users.json'
 
+# Create system detector instance
+detector = SystemDetector()
+
+
+def hash_password(password: str, salt: str = None) -> tuple:
+    """
+    Hash password with PBKDF2 and salt
+    Returns (hashed_password, salt)
+    """
+    if salt is None:
+        salt = secrets.token_hex(32)
+    
+    # Use PBKDF2 with 100,000 iterations
+    key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return key.hex(), salt
+
+
+def verify_password(password: str, hashed_password: str, salt: str) -> bool:
+    """Verify password against hash"""
+    key, _ = hash_password(password, salt)
+    return hmac.compare_digest(key, hashed_password)
+
+
 # Default admin credentials
 DEFAULT_ADMIN = {
     'username': 'admin',
-    'password_hash': hashlib.sha256('admin123'.encode()).hexdigest(),  # Change on first login
     'role': 'admin',
-    'must_change_password': True
+    'must_change_password': True,
+    'created_at': datetime.now().isoformat()
 }
+# Set default password with proper hashing
+DEFAULT_PASSWORD, DEFAULT_SALT = hash_password('admin123')
+DEFAULT_ADMIN['password_hash'] = DEFAULT_PASSWORD
+DEFAULT_ADMIN['salt'] = DEFAULT_SALT
 
 
 class GUIConfig:
@@ -136,20 +165,34 @@ def login():
         users = config_manager.load_users()
         
         if username in users:
-            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            user = users[username]
             
-            if users[username]['password_hash'] == password_hash:
-                session['user'] = username
-                session['role'] = users[username].get('role', 'user')
-                session['login_time'] = datetime.now().isoformat()
-                
-                # Check if password change required
-                if users[username].get('must_change_password'):
-                    flash('Please change your password', 'warning')
+            # Support both old SHA256 and new PBKDF2 hashing
+            if 'salt' in user:
+                # New secure method
+                if verify_password(password, user['password_hash'], user['salt']):
+                    session['user'] = username
+                    session['role'] = user.get('role', 'user')
+                    session['login_time'] = datetime.now().isoformat()
+                    
+                    # Check if password change required
+                    if user.get('must_change_password'):
+                        flash('Please change your password for security', 'warning')
+                        return redirect(url_for('change_password'))
+                    
+                    flash(f'Welcome {username}!', 'success')
+                    return redirect(url_for('dashboard'))
+            else:
+                # Old method (for backward compatibility) - migrate to new method
+                password_hash = hashlib.sha256(password.encode()).hexdigest()
+                if user['password_hash'] == password_hash:
+                    session['user'] = username
+                    session['role'] = user.get('role', 'user')
+                    session['login_time'] = datetime.now().isoformat()
+                    
+                    # Force migration to new password system
+                    flash('Please change your password to upgrade security', 'warning')
                     return redirect(url_for('change_password'))
-                
-                flash(f'Welcome {username}!', 'success')
-                return redirect(url_for('dashboard'))
         
         flash('Invalid credentials', 'error')
     
@@ -177,25 +220,43 @@ def change_password():
             flash('Passwords do not match', 'error')
             return render_template('change_password.html')
         
+        # Password strength check
+        if len(new_password) < 8:
+            flash('Password must be at least 8 characters long', 'error')
+            return render_template('change_password.html')
+        
         users = config_manager.load_users()
         username = session['user']
+        user = users[username]
         
-        # Verify current password
-        current_hash = hashlib.sha256(current_password.encode()).hexdigest()
-        if users[username]['password_hash'] != current_hash:
+        # Verify current password (support both old and new methods)
+        password_valid = False
+        if 'salt' in user:
+            password_valid = verify_password(current_password, user['password_hash'], user['salt'])
+        else:
+            current_hash = hashlib.sha256(current_password.encode()).hexdigest()
+            password_valid = (user['password_hash'] == current_hash)
+        
+        if not password_valid:
             flash('Current password incorrect', 'error')
             return render_template('change_password.html')
         
-        # Update password
-        users[username]['password_hash'] = hashlib.sha256(new_password.encode()).hexdigest()
+        # Update password with new secure method
+        new_hash, new_salt = hash_password(new_password)
+        users[username]['password_hash'] = new_hash
+        users[username]['salt'] = new_salt
         users[username]['must_change_password'] = False
         users[username]['password_changed_at'] = datetime.now().isoformat()
         config_manager.save_users(users)
         
-        flash('Password changed successfully', 'success')
+        flash('Password changed successfully! Your password is now securely encrypted.', 'success')
         return redirect(url_for('dashboard'))
     
-    return render_template('change_password.html')
+    # Check if force change
+    users = config_manager.load_users()
+    must_change = users[session['user']].get('must_change_password', False)
+    
+    return render_template('change_password.html', must_change=must_change)
 
 
 # ============================================================================
@@ -218,40 +279,174 @@ def api_system_status():
     return jsonify(get_system_status())
 
 
+@app.route('/api/oracle-metrics')
+@login_required
+def api_oracle_metrics():
+    """API: Get detailed Oracle metrics (SGA, PGA, processes, tablespaces)"""
+    metrics = detector.get_oracle_metrics()
+    return jsonify({
+        'success': True,
+        'metrics': metrics,
+        'timestamp': datetime.now().isoformat()
+    })
+
+
+@app.route('/api/installation-status')
+@login_required
+def api_installation_status():
+    """API: Get what's installed and what can be activated"""
+    detection = detector.detect_all()
+    
+    installation_status = {
+        'components': {
+            'oracle_database': {
+                'installed': detection['oracle']['installed'],
+                'version': detection['oracle']['version'],
+                'can_activate': detection['oracle']['installed'] and not detection['database']['running'],
+                'active': detection['database']['running'],
+                'binaries': detection['oracle']['binaries']
+            },
+            'listener': {
+                'installed': detection['oracle']['binaries'].get('lsnrctl', False),
+                'can_activate': detection['oracle']['installed'] and not detection['listener']['running'],
+                'active': detection['listener']['running'],
+                'ports': detection['listener']['ports']
+            },
+            'grid_infrastructure': {
+                'installed': detection['grid']['installed'],
+                'can_activate': detection['grid']['installed'] and not detection['grid']['running'],
+                'active': detection['grid']['running'],
+                'grid_home': detection['grid']['grid_home']
+            },
+            'asm': {
+                'installed': detection['asm']['installed'],
+                'can_activate': detection['asm']['installed'] and not detection['asm']['running'],
+                'active': detection['asm']['running'],
+                'disk_groups': detection['asm']['disk_groups']
+            }
+        },
+        'features': detection['features'],
+        'summary': {
+            'total_components': 4,
+            'installed': sum([
+                detection['oracle']['installed'],
+                detection['oracle']['binaries'].get('lsnrctl', False),
+                detection['grid']['installed'],
+                detection['asm']['installed']
+            ]),
+            'active': sum([
+                detection['database']['running'],
+                detection['listener']['running'],
+                detection['grid']['running'],
+                detection['asm']['running']
+            ])
+        }
+    }
+    
+    return jsonify(installation_status)
+
+
+@app.route('/profile')
+@login_required
+def profile():
+    """User profile page"""
+    users = config_manager.load_users()
+    user_data = users[session['user']]
+    
+    # Mask sensitive data
+    profile_data = {
+        'username': session['user'],
+        'role': user_data.get('role', 'user'),
+        'created_at': user_data.get('created_at', 'Unknown'),
+        'password_changed_at': user_data.get('password_changed_at', 'Never'),
+        'last_login': session.get('login_time', 'Unknown'),
+        'password_security': 'PBKDF2-SHA256 with salt' if 'salt' in user_data else 'Legacy (upgrade recommended)'
+    }
+    
+    return render_template('profile.html', profile=profile_data)
+
+
+@app.route('/api/features/toggle', methods=['POST'])
+@login_required
+@admin_required
+def api_features_toggle():
+    """API: Enable/disable Oracle features"""
+    data = request.json
+    feature = data.get('feature')
+    action = data.get('action')  # 'enable' or 'disable'
+    
+    if feature not in ['archivelog', 'fra', 'flashback', 'rman']:
+        return jsonify({'success': False, 'error': 'Invalid feature'})
+    
+    try:
+        if action == 'enable':
+            result = execute_cli_command(['oradba', 'protection', feature, 'enable'])
+        elif action == 'disable':
+            result = execute_cli_command(['oradba', 'protection', feature, 'disable'])
+        else:
+            return jsonify({'success': False, 'error': 'Invalid action'})
+        
+        return jsonify({'success': True, 'output': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 def get_system_status():
-    """Get comprehensive system status"""
+    """Get comprehensive system status using SystemDetector"""
+    # Use system detector for comprehensive information
+    detection = detector.detect_all()
+    metrics = detector.get_oracle_metrics()
+    
     status = {
         'hostname': subprocess.getoutput('hostname'),
         'timestamp': datetime.now().isoformat(),
-        'oracle_home': os.environ.get('ORACLE_HOME', 'Not set'),
-        'checks': {}
+        'oracle_home': detection['oracle']['oracle_home'],
+        
+        # Installation status
+        'checks': {
+            'oracle_installed': detection['oracle']['installed'],
+            'database_running': detection['database']['running'],
+            'listener_running': detection['listener']['running'],
+            'cluster_configured': detection['cluster']['configured'],
+            'grid_installed': detection['grid']['installed'],
+            'asm_running': detection['asm']['running']
+        },
+        
+        # Oracle details
+        'oracle': {
+            'version': detection['oracle']['version'],
+            'binaries': detection['oracle']['binaries'],
+            'installation_valid': all(detection['oracle']['binaries'].values())
+        },
+        
+        # Database details
+        'database': {
+            'instances': detection['database']['instances'],
+            'current_sid': detection['database']['current_sid'],
+            'processes': detection['database']['processes']
+        },
+        
+        # Listener details  
+        'listener': {
+            'count': len(detection['listener']['listeners']),
+            'ports': detection['listener']['ports']
+        },
+        
+        # Features status
+        'features': detection['features'],
+        
+        # Oracle metrics (SGA, PGA, etc.)
+        'metrics': metrics,
+        
+        # Cluster info
+        'cluster': detection['cluster'],
+        
+        # Grid Infrastructure
+        'grid': detection['grid'],
+        
+        # ASM
+        'asm': detection['asm']
     }
-    
-    # Check Oracle installation
-    oracle_home = os.environ.get('ORACLE_HOME')
-    if oracle_home and os.path.exists(f"{oracle_home}/bin/sqlplus"):
-        status['checks']['oracle_installed'] = True
-        status['checks']['sqlplus_version'] = subprocess.getoutput(f"{oracle_home}/bin/sqlplus -v")
-    else:
-        status['checks']['oracle_installed'] = False
-    
-    # Check if database is running
-    try:
-        result = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
-        status['checks']['database_running'] = 'ora_pmon' in result.stdout
-    except:
-        status['checks']['database_running'] = False
-    
-    # Check listener
-    try:
-        result = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
-        status['checks']['listener_running'] = 'tnslsnr' in result.stdout
-    except:
-        status['checks']['listener_running'] = False
-    
-    # Check cluster config
-    cluster_config = CONFIG_DIR / 'cluster.yaml'
-    status['checks']['cluster_configured'] = cluster_config.exists()
     
     return status
 

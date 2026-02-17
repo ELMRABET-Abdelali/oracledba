@@ -15,6 +15,7 @@ from . import database
 from . import cluster
 from . import sample
 from . import help_system
+from . import system_detector
 
 __all__ = [
     'install',
@@ -31,4 +32,5 @@ __all__ = [
     'cluster',
     'sample',
     'help_system',
+    'system_detector',
 ]

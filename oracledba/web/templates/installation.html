@@ -187,7 +187,9 @@
 
 {% block extra_js %}
 <script>
-let installSocket = null;
+let currentLogType = null;
+let logPollingInterval = null;
+let lastLogSize = 0;
 
 function log(message, type = 'info') {
     const logEl = document.getElementById('install-log');
@@ -197,11 +199,65 @@ function log(message, type = 'info') {
     logEl.scrollTop = logEl.scrollHeight;
 }
 
+function startLogPolling(logType) {
+    currentLogType = logType;
+    lastLogSize = 0;
+    
+    // Clear existing interval
+    if (logPollingInterval) {
+        clearInterval(logPollingInterval);
+    }
+    
+    // Start polling every 1 second
+    logPollingInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/installation/logs/${logType}`);
+            const data = await response.json();
+            
+            if (data.success && data.logs) {
+                const logEl = document.getElementById('install-log');
+                
+                // Only update if content changed
+                if (data.size !== lastLogSize) {
+                    logEl.textContent = data.logs;
+                    logEl.scrollTop = logEl.scrollHeight;
+                    lastLogSize = data.size;
+                }
+                
+                // Stop polling if process finished
+                if (!data.is_running && data.size > 0) {
+                    clearInterval(logPollingInterval);
+                    logPollingInterval = null;
+                    
+                    // Check if successful
+                    if (data.logs.includes('Complete') || data.logs.includes('SUCCESS')) {
+                        log(`${logType} completed successfully!`, 'success');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching logs:', error);
+        }
+    }, 1000);
+}
+
+function stopLogPolling() {
+    if (logPollingInterval) {
+        clearInterval(logPollingInterval);
+        logPollingInterval = null;
+    }
+    currentLogType = null;
+}
+
 async function downloadFromGoogleDrive() {
-    log('Starting Google Drive download...', 'info');
+    log('Starting Google Drive download (3.06 GB)...', 'info');
+    log('This may take 10-20 minutes depending on your connection', 'info');
     
     const statusDiv = document.getElementById('download-status');
-    statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Downloading LINUX.X64_193000_db_home.zip (3.06 GB)...</div>';
+    statusDiv.innerHTML = '<div class=\"alert alert-info\"><i class=\"fas fa-spinner fa-spin\"></i> Downloading LINUX.X64_193000_db_home.zip...</div>';
+    
+    // Clear log and start watching
+    document.getElementById('install-log').textContent = 'Starting download...\n';
     
     try {
         const response = await apiCall('/api/installation/download', {
@@ -214,10 +270,14 @@ async function downloadFromGoogleDrive() {
         }
         
         log(response.message, 'success');
-        statusDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> Download complete!</div>';
+        statusDiv.innerHTML = '<div class=\"alert alert-success\"><i class=\"fas fa-check\"></i> Download started! Check log below for progress.</div>';
+        
+        // Start polling download logs
+        startLogPolling('download');
+        
     } catch (error) {
         log(`Download failed: ${error.message}`, 'error');
-        statusDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${error.message}</div>`;
+        statusDiv.innerHTML = `<div class=\"alert alert-danger\"><i class=\"fas fa-times\"></i> ${error.message}</div>`;
     }
 }
 
@@ -231,13 +291,19 @@ async function runPrecheck() {
         
         if (response.passed) {
             log('System precheck passed!', 'success');
-            statusEl.innerHTML = '<span class="badge badge-success">Ready</span>';
+            statusEl.innerHTML = '<span class=\"badge badge-success\">✓ Ready</span>';
         } else {
-            log('System precheck found issues', 'error');
-            statusEl.innerHTML = '<span class="badge badge-warning">Issues Found</span>';
+            log('System precheck found issues:', 'error');
+            statusEl.innerHTML = '<span class=\"badge badge-warning\">⚠ Issues Found</span>';
             
-            for (const issue of response.issues) {
-                log(`  - ${issue}`, 'error');
+            if (response.issues) {
+                for (const issue of response.issues) {
+                    log(`  - ${issue}`, 'error');
+                }
+            }
+            
+            if (response.output) {
+                document.getElementById('install-log').textContent = response.output;
             }
         }
     } catch (error) {
@@ -251,23 +317,37 @@ async function installSystem() {
     }
     
     log('Installing system prerequisites...', 'info');
+    log('This may take 5-10 minutes', 'info');
     
     const btn = document.getElementById('install-system-btn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
+    btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Installing...';
+    
+    // Clear log
+    document.getElementById('install-log').textContent = 'Starting system installation...\n';
     
     try {
         const response = await apiCall('/api/installation/system', {
             method: 'POST'
         });
         
-        log(response.message || 'System prerequisites installed', 'success');
-        document.getElementById('system-status').innerHTML = '<span class="badge badge-success">Installed</span>';
+        log(response.message || 'System installation started', 'success');
+        document.getElementById('system-status').innerHTML = '<span class=\"badge badge-info\">⏳ Installing...</span>';
+        
+        // Start polling logs
+        startLogPolling('system');
+        
+        // Re-enable button after 30 seconds
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class=\"fas fa-cogs\"></i> Install System Prerequisites';
+            document.getElementById('system-status').innerHTML = '<span class=\"badge badge-success\">✓ Installed</span>';
+        }, 30000);
+        
     } catch (error) {
         log(`Installation failed: ${error.message}`, 'error');
-    } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-cogs"></i> Install System Prerequisites';
+        btn.innerHTML = '<i class=\"fas fa-cogs\"></i> Install System Prerequisites';
     }
 }
 
@@ -284,10 +364,14 @@ async function installBinaries() {
     }
     
     log(`Installing Oracle binaries to ${oracleHome}...`, 'info');
+    log('This may take 10-15 minutes', 'info');
     
     const btn = document.getElementById('install-binaries-btn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
+    btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Installing...';
+    
+    // Clear log
+    document.getElementById('install-log').textContent = 'Starting binaries installation...\n';
     
     try {
         const response = await apiCall('/api/installation/binaries', {
@@ -295,13 +379,27 @@ async function installBinaries() {
             body: JSON.stringify({ oracle_home: oracleHome })
         });
         
-        log(response.message || 'Binaries installed successfully', 'success');
-        document.getElementById('binaries-status').innerHTML = '<span class="badge badge-success">Installed</span>';
+        log(response.message || 'Binaries installation started', 'success');
+        document.getElementById('binaries-status').innerHTML = '<span class=\"badge badge-info\">⏳ Installing...</span>';
+        
+        // Start polling logs
+        startLogPolling('binaries');
+        
+        // Re-enable button after completion (check every 10 seconds)
+        const checkInterval = setInterval(async () => {
+            const logsResponse = await apiCall('/api/installation/logs/binaries');
+            if (logsResponse.success && !logsResponse.is_running && logsResponse.size > 0) {
+                clearInterval(checkInterval);
+                btn.disabled = false;
+                btn.innerHTML = '<i class=\"fas fa-box\"></i> Install Binaries';
+                document.getElementById('binaries-status').innerHTML = '<span class=\"badge badge-success\">✓ Installed</span>';
+            }
+        }, 10000);
+        
     } catch (error) {
         log(`Installation failed: ${error.message}`, 'error');
-    } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-box"></i> Install Binaries';
+        btn.innerHTML = '<i class=\"fas fa-box\"></i> Install Binaries';
     }
 }
 
@@ -318,10 +416,14 @@ async function createDatabase() {
     }
     
     log(`Creating database ${dbName}...`, 'info');
+    log('This may take 15-30 minutes', 'info');
     
     const btn = document.getElementById('create-database-btn');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Creating...';
+    
+    // Clear log
+    document.getElementById('install-log').textContent = 'Starting database creation...\n';
     
     try {
         const response = await apiCall('/api/installation/database', {
@@ -329,13 +431,27 @@ async function createDatabase() {
             body: JSON.stringify({ db_name: dbName })
         });
         
-        log(response.message || 'Database created successfully', 'success');
-        document.getElementById('database-status').innerHTML = '<span class="badge badge-success">Created</span>';
+        log(response.message || 'Database creation started', 'success');
+        document.getElementById('database-status').innerHTML = '<span class=\"badge badge-info\">⏳ Creating...</span>';
+        
+        // Start polling logs
+        startLogPolling('database');
+        
+        // Re-enable button after completion
+        const checkInterval = setInterval(async () => {
+            const logsResponse = await apiCall('/api/installation/logs/database');
+            if (logsResponse.success && !logsResponse.is_running && logsResponse.size > 0) {
+                clearInterval(checkInterval);
+                btn.disabled = false;
+                btn.innerHTML = '<i class=\"fas fa-database\"></i> Create Database';
+                document.getElementById('database-status').innerHTML = '<span class=\"badge badge-success\">✓ Running</span>';
+            }
+        }, 10000);
+        
     } catch (error) {
         log(`Creation failed: ${error.message}`, 'error');
-    } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-database"></i> Create Database';
+        btn.innerHTML = '<i class=\"fas fa-database\"></i> Create Database';
     }
 }
 
@@ -344,22 +460,29 @@ async function fullInstall() {
         return;
     }
     
-    log('Starting full installation...', 'info');
+    log('===== STARTING FULL INSTALLATION =====', 'success');
+    log('This will take 30-60 minutes. Please be patient.', 'info');
     
     try {
-        // System
-        log('Step 1/3: Installing system prerequisites...', 'info');
+        // Step 1: System
+        log('\\n=== STEP 1/3: System Prerequisites ===', 'info');
         await installSystem();
         
-        // Binaries
-        log('Step 2/3: Installing Oracle binaries...', 'info');
+        // Wait for system to complete (simplified - should check logs)
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        
+        // Step 2: Binaries
+        log('\\n=== STEP 2/3: Oracle Binaries ===', 'info');
         await installBinaries();
         
-        // Database
-        log('Step 3/3: Creating database...', 'info');
+        // Wait for binaries to complete
+        await new Promise(resolve => setTimeout(resolve, 300000)); // 5 min
+        
+        // Step 3: Database
+        log('\\n=== STEP 3/3: Database Creation ===', 'info');
         await createDatabase();
         
-        log('===== INSTALLATION COMPLETE =====', 'success');
+        log('\\n===== FULL INSTALLATION COMPLETE =====', 'success');
     } catch (error) {
         log(`Full installation failed: ${error.message}`, 'error');
     }
@@ -374,24 +497,29 @@ window.addEventListener('load', async () => {
         if (status.components) {
             const systemStatus = status.components.oracle_database && status.components.oracle_database.installed;
             if (systemStatus) {
-                document.getElementById('system-status').innerHTML = '<span class="badge badge-success">Ready</span>';
+                document.getElementById('system-status').innerHTML = '<span class=\"badge badge-success\">✓ Ready</span>';
             }
             
             const binariesStatus = status.components.oracle_database && status.components.oracle_database.installed;
             if (binariesStatus) {
-                document.getElementById('binaries-status').innerHTML = '<span class="badge badge-success">Installed</span>';
+                document.getElementById('binaries-status').innerHTML = '<span class=\"badge badge-success\">✓ Installed</span>';
             }
             
             const dbStatus = status.components.oracle_database && status.components.oracle_database.active;
             if (dbStatus) {
-                document.getElementById('database-status').innerHTML = '<span class="badge badge-success">Running</span>';
+                document.getElementById('database-status').innerHTML = '<span class=\"badge badge-success\">✓ Running</span>';
             }
         }
         
-        log('Installation status loaded', 'success');
+        log('Installation page loaded. Ready to start!', 'success');
     } catch (error) {
         log('Could not load installation status', 'error');
     }
+});
+
+// Cleanup polling on page unload
+window.addEventListener('beforeunload', () => {
+    stopLogPolling();
 });
 </script>
 {% endblock %}

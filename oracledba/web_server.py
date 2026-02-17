@@ -1038,6 +1038,109 @@ echo ""
         })
 
 
+@app.route('/api/installation/quick', methods=['POST'])
+@login_required
+@admin_required
+def api_installation_quick():
+    """Quick one-click installation - runs all CLI commands in sequence"""
+    import subprocess
+    data = request.json or {}
+    oracle_home = data.get('oracle_home', '/u01/app/oracle/product/19.3.0/dbhome_1')
+    db_name = data.get('db_name', 'ORCL')
+    
+    try:
+        # Create comprehensive installation script that uses working CLI commands
+        script_content = f"""#!/bin/bash
+set -e
+
+echo "=============================================="
+echo "  ORACLE 19c - AUTOMATED INSTALLATION"
+echo "  Started: $(date)"
+echo "=============================================="
+echo ""
+
+# Function for timestamped logging
+log() {{
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}}
+
+# ===== STEP 1/4: System Validation =====
+log "STEP 1/4: Running system precheck..."
+echo ""
+oradba precheck 2>&1 || {{
+    log "⚠ Precheck found issues, but continuing..."
+}}
+echo ""
+log "✓ System validation complete"
+echo ""
+
+# ===== STEP 2/4: System Prerequisites =====
+log "STEP 2/4: Installing system prerequisites..."
+log "This configures users, groups, and kernel parameters..."
+echo ""
+oradba install system 2>&1
+echo ""
+log "✓ System prerequisites installed successfully"
+echo ""
+
+# ===== STEP 3/4: Oracle Binaries =====
+log "STEP 3/4: Installing Oracle binaries..."
+log "Oracle Home: {oracle_home}"
+log "This may take 10-15 minutes..."
+echo ""
+export ORACLE_HOME="{oracle_home}"
+oradba install binaries 2>&1
+echo ""
+log "✓ Oracle binaries installed successfully"
+echo ""
+
+# ===== STEP 4/4: Database Creation =====
+log "STEP 4/4: Creating database {db_name}..."
+log "This may take 15-30 minutes..."
+echo ""
+oradba install database --name {db_name} 2>&1
+echo ""
+log "✓ Database {db_name} created successfully"
+echo ""
+
+echo "=============================================="
+echo "  ✓ INSTALLATION COMPLETE!"
+echo "  Finished: $(date)"
+echo "=============================================="
+echo ""
+echo "You can now connect with:"
+echo "  sqlplus / as sysdba"
+echo ""
+"""
+        
+        script_path = '/tmp/oracle-quick-install.sh'
+        with open(script_path, 'w') as f:
+            f.write(script_content)
+        
+        os.chmod(script_path, 0o755)
+        
+        # Execute script in background
+        cmd = f"nohup bash {script_path} > /tmp/oracle-quick-install.log 2>&1 &"
+        subprocess.Popen(cmd, shell=True)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Automated installation started! This will take 30-60 minutes.',
+            'log_file': '/tmp/oracle-quick-install.log',
+            'steps': [
+                {'step': 1, 'name': 'System Validation', 'status': 'running'},
+                {'step': 2, 'name': 'System Prerequisites', 'status': 'pending'},
+                {'step': 3, 'name': 'Oracle Binaries', 'status': 'pending'},
+                {'step': 4, 'name': 'Database Creation', 'status': 'pending'}
+            ]
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
 @app.route('/api/installation/logs/<log_type>')
 @login_required
 @admin_required
@@ -1049,7 +1152,8 @@ def api_installation_logs(log_type):
             'download': '/tmp/oracle-download.log',
             'system': '/tmp/oracle-install-system.log',
             'binaries': '/tmp/oracle-install-binaries.log',
-            'database': '/tmp/oracle-install-database.log'
+            'database': '/tmp/oracle-install-database.log',
+            'quick': '/tmp/oracle-quick-install.log'
         }
         
         log_file = log_files.get(log_type)

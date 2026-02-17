@@ -120,18 +120,30 @@
                     <hr>
 
                     <!-- Quick Install Option -->
-                    <div class="installation-step">
-                        <h4><i class="fas fa-bolt text-warning"></i> Quick Install (All Steps)</h4>
-                        <p class="text-muted">Run complete installation automatically (Steps 2-4)</p>
+                    <div class="installation-step" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; color: white;">
+                        <h3 style="color: white;"><i class="fas fa-bolt"></i> One-Click Automated Installation</h3>
+                        <p style="color: #f0f0f0; font-size: 16px;">Complete automated installation using proven CLI commands</p>
                         
-                        <div class="alert alert-warning">
-                            <strong>Warning:</strong> This will take 30-60 minutes depending on your system.
-                            Make sure you have downloaded the Oracle software first.
+                        <div class="alert alert-light" style="background: rgba(255,255,255,0.9);">
+                            <strong>📋 What this does:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li><strong>Step 1:</strong> System validation (precheck)</li>
+                                <li><strong>Step 2:</strong> System prerequisites (users, groups, kernel)</li>
+                                <li><strong>Step 3:</strong> Oracle binaries installation</li>
+                                <li><strong>Step 4:</strong> Database creation</li>
+                            </ul>
+                            <p class="mt-2 mb-0"><strong>⏱ Duration:</strong> 30-60 minutes | <strong>📁 Oracle software must be already downloaded</strong></p>
                         </div>
                         
-                        <button class="btn btn-warning" onclick="fullInstall()">
-                            <i class="fas fa-rocket"></i> Full Installation
-                        </button>
+                        <div class="text-center mt-3">
+                            <button class="btn btn-light btn-lg" onclick="quickInstall()" id="quick-install-btn" style="font-size: 18px; padding: 15px 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                                <i class="fas fa-rocket"></i> Start Automated Installation
+                            </button>
+                        </div>
+                        
+                        <p class="text-center mt-3 mb-0" style="color: #e0e0e0; font-size: 14px;">
+                            <i class="fas fa-info-circle"></i> Individual steps above are available for debugging
+                        </p>
                     </div>
                 </div>
             </div>
@@ -459,41 +471,68 @@ async function createDatabase() {
     }
 }
 
-async function fullInstall() {
-    if (!confirm('Run automated installation? Each step will be validated before proceeding.')) {
+async function quickInstall() {
+    const oracleHome = document.getElementById('oracle-home').value || '/u01/app/oracle/product/19.3.0/dbhome_1';
+    const dbName = document.getElementById('db-name').value || 'ORCL';
+    
+    if (!confirm(`Start automated installation?\n\nOracle Home: ${oracleHome}\nDatabase: ${dbName}\n\nThis will take 30-60 minutes and run all steps automatically.`)) {
         return;
     }
     
-    log('===== STARTING AUTOMATED INSTALLATION =====', 'success');
-    log('Each step will complete and be validated before proceeding to the next.', 'info');
+    log('===== STARTING ONE-CLICK AUTOMATED INSTALLATION =====', 'success');
+    log('Using proven CLI commands: oradba precheck, install system, install binaries, install database', 'info');
+    log('', 'info');
+    
+    const btn = document.getElementById('quick-install-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class=\"fas fa-spinner fa-spin\"></i> Installing... (30-60 min)';
+    
+    // Clear log
+    document.getElementById('install-log').textContent = 'Starting automated installation...\n';
     
     try {
-        // Step 1: Run precheck first
-        log('\\n=== STEP 1/4: System Validation ===', 'info');
-        await runPrecheck();
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        const response = await apiCall('/api/installation/quick', 'POST', {
+            oracle_home: oracleHome,
+            db_name: dbName
+        });
         
-        // Step 2: System Prerequisites
-        log('\\n=== STEP 2/4: System Prerequisites ===', 'info');
-        await installSystem();
-        log('✓ System prerequisites validated and installed', 'success');
+        if (response.error) {
+            throw new Error(response.error);
+        }
         
-        // Step 3: Oracle Binaries
-        log('\\n=== STEP 3/4: Oracle Binaries ===', 'info');
-        await installBinaries();
-        log('✓ Oracle binaries validated and installed', 'success');
+        log(response.message, 'success');
+        log('', 'info');
+        log('Real-time output from CLI commands:', 'info');
+        log('=====================================', 'info');
         
-        // Step 4: Database Creation
-        log('\\n=== STEP 4/4: Database Creation ===', 'info');
-        await createDatabase();
-        log('✓ Database validated and created', 'success');
+        // Start polling logs
+        startLogPolling('quick');
         
-        log('\\n===== AUTOMATED INSTALLATION COMPLETE =====', 'success');
-        log('All steps completed successfully!', 'success');
+        // Wait for completion
+        await waitForCompletion('quick', () => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class=\"fas fa-rocket\"></i> Start Automated Installation';
+            log('', 'success');
+            log('===== INSTALLATION COMPLETE =====', 'success');
+            log('All steps executed successfully!', 'success');
+            
+            // Update all status badges
+            document.getElementById('system-status').innerHTML = '<span class=\"badge badge-success\">✓ Ready</span>';
+            document.getElementById('binaries-status').innerHTML = '<span class=\"badge badge-success\">✓ Installed</span>';
+            document.getElementById('database-status').innerHTML = '<span class=\"badge badge-success\">✓ Running</span>';
+        });
+        
     } catch (error) {
         log(`Installation failed: ${error.message}`, 'error');
-        log('Please review the errors above and retry the failed step.', 'error');
+        log('Check the log output above for details', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class=\"fas fa-rocket\"></i> Start Automated Installation';
     }
+}
+
+async function fullInstall() {
+    // Legacy function - redirect to quickInstall
+    return quickInstall();
 }
 
 // Check installation status on page load

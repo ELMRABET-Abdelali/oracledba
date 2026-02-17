@@ -716,6 +716,209 @@ def api_terminal_execute():
 
 
 # ============================================================================
+# INSTALLATION ROUTES
+# ============================================================================
+
+@app.route('/installation')
+@login_required
+@admin_required
+def installation():
+    """Installation wizard page"""
+    return render_template('installation.html')
+
+
+@app.route('/api/installation/download', methods=['POST'])
+@login_required
+@admin_required
+def api_installation_download():
+    """Download Oracle software"""
+    import subprocess
+    data = request.json or {}
+    source = data.get('source', 'google_drive')
+    
+    try:
+        if source == 'google_drive':
+            # Google Drive file ID for LINUX.X64_193000_db_home.zip
+            file_id = '1Mi7B2HneMBIyxJ01tnA-ThQ9hr2CAsns'
+            
+            # Check if gdown is installed
+            check_gdown = subprocess.run(['which', 'gdown'], capture_output=True)
+            
+            if check_gdown.returncode != 0:
+                # Install gdown
+                subprocess.run(['pip3', 'install', '--user', 'gdown'], check=True)
+            
+            # Download to /tmp
+            oracle_home = os.environ.get('ORACLE_HOME', '/u01/app/oracle/product/19.3.0/dbhome_1')
+            download_path = f"{oracle_home}/LINUX.X64_193000_db_home.zip"
+            
+            # Ensure directory exists
+            os.makedirs(oracle_home, exist_ok=True)
+            
+            # Start download in background
+            cmd = f"nohup gdown {file_id} -O {download_path} > /tmp/oracle-download.log 2>&1 &"
+            subprocess.Popen(cmd, shell=True)
+            
+            return jsonify({
+                'success': True,
+                'message': f'Download started. Check progress: tail -f /tmp/oracle-download.log',
+                'download_path': download_path
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Unknown download source'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/api/installation/precheck', methods=['GET'])
+@login_required
+@admin_required
+def api_installation_precheck():
+    """Run system precheck"""
+    try:
+        result = execute_cli_command(['oradba', 'precheck'])
+        
+        # Parse result to determine if passed
+        passed = 'ERROR' not in result.upper() and 'FAIL' not in result.upper()
+        
+        # Extract issues (simple parsing)
+        issues = []
+        for line in result.split('\n'):
+            if 'ERROR' in line.upper() or 'FAIL' in line.upper():
+                issues.append(line.strip())
+        
+        return jsonify({
+            'success': True,
+            'passed': passed,
+            'issues': issues,
+            'output': result
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/api/installation/system', methods=['POST'])
+@login_required
+@admin_required
+def api_installation_system():
+    """Install system prerequisites"""
+    import subprocess
+    try:
+        # Run in background
+        cmd = "nohup oradba install system > /tmp/oracle-install-system.log 2>&1 &"
+        subprocess.Popen(cmd, shell=True)
+        
+        return jsonify({
+            'success': True,
+            'message': 'System installation started. Check progress: tail -f /tmp/oracle-install-system.log'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/api/installation/binaries', methods=['POST'])
+@login_required
+@admin_required
+def api_installation_binaries():
+    """Install Oracle binaries"""
+    import subprocess
+    data = request.json or {}
+    oracle_home = data.get('oracle_home', '/u01/app/oracle/product/19.3.0/dbhome_1')
+    
+    try:
+        # Set environment variable
+        os.environ['ORACLE_HOME'] = oracle_home
+        
+        # Run in background
+        cmd = "nohup oradba install binaries > /tmp/oracle-install-binaries.log 2>&1 &"
+        subprocess.Popen(cmd, shell=True)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Binary installation started to {oracle_home}. Check progress: tail -f /tmp/oracle-install-binaries.log'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/api/installation/database', methods=['POST'])
+@login_required
+@admin_required
+def api_installation_database():
+    """Create Oracle database"""
+    import subprocess
+    data = request.json or {}
+    db_name = data.get('db_name', 'ORCL')
+    
+    try:
+        # Run in background
+        cmd = f"nohup oradba install database --name {db_name} > /tmp/oracle-install-database.log 2>&1 &"
+        subprocess.Popen(cmd, shell=True)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Database creation started for {db_name}. Check progress: tail -f /tmp/oracle-install-database.log'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/api/installation/logs/<log_type>')
+@login_required
+@admin_required
+def api_installation_logs(log_type):
+    """Get installation logs"""
+    try:
+        log_files = {
+            'download': '/tmp/oracle-download.log',
+            'system': '/tmp/oracle-install-system.log',
+            'binaries': '/tmp/oracle-install-binaries.log',
+            'database': '/tmp/oracle-install-database.log'
+        }
+        
+        log_file = log_files.get(log_type)
+        if not log_file or not os.path.exists(log_file):
+            return jsonify({
+                'success': False,
+                'error': 'Log file not found'
+            })
+        
+        # Read last 100 lines
+        with open(log_file, 'r') as f:
+            lines = f.readlines()
+            last_lines = lines[-100:] if len(lines) > 100 else lines
+        
+        return jsonify({
+            'success': True,
+            'logs': ''.join(last_lines)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 

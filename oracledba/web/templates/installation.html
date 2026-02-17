@@ -1,0 +1,397 @@
+{% extends "base.html" %}
+
+{% block title %}Installation - OracleDBA{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1><i class="fas fa-download"></i> Oracle 19c Installation</h1>
+            <p class="text-muted">Complete installation wizard for Oracle Database 19c</p>
+        </div>
+    </div>
+
+    <!-- Installation Steps -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-list-ol"></i> Installation Steps</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Step 1: Download Oracle Software -->
+                    <div class="installation-step">
+                        <h4><span class="step-number">1</span> Download Oracle 19c Software</h4>
+                        <p class="text-muted">LINUX.X64_193000_db_home.zip (3.06 GB)</p>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-info">
+                                    <div class="card-body">
+                                        <h6><i class="fas fa-link text-info"></i> Official Oracle Download</h6>
+                                        <p class="small">Download from Oracle's official website (requires Oracle account)</p>
+                                        <a href="https://www.oracle.com/fr/database/technologies/oracle19c-linux-downloads.html#license-lightbox" 
+                                           target="_blank" class="btn btn-info btn-sm">
+                                            <i class="fas fa-external-link-alt"></i> Oracle Website
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-success">
+                                    <div class="card-body">
+                                        <h6><i class="fab fa-google-drive text-success"></i> Google Drive Mirror</h6>
+                                        <p class="small">Direct download (no Oracle account needed)</p>
+                                        <button class="btn btn-success btn-sm" onclick="downloadFromGoogleDrive()">
+                                            <i class="fas fa-download"></i> Download from Google Drive
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3" id="download-status"></div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Step 2: System Prerequisites -->
+                    <div class="installation-step">
+                        <h4><span class="step-number">2</span> System Prerequisites</h4>
+                        <p class="text-muted">Prepare the system (users, groups, kernel parameters)</p>
+                        
+                        <div class="status-indicator" id="system-status">
+                            <span class="badge badge-secondary">Checking...</span>
+                        </div>
+                        
+                        <button class="btn btn-warning btn-sm mt-2" onclick="runPrecheck()">
+                            <i class="fas fa-check-circle"></i> Run System Precheck
+                        </button>
+                        
+                        <button class="btn btn-primary btn-sm mt-2" onclick="installSystem()" id="install-system-btn">
+                            <i class="fas fa-cogs"></i> Install System Prerequisites
+                        </button>
+                    </div>
+
+                    <hr>
+
+                    <!-- Step 3: Install Oracle Binaries -->
+                    <div class="installation-step">
+                        <h4><span class="step-number">3</span> Install Oracle Binaries</h4>
+                        <p class="text-muted">Extract and install Oracle 19c software</p>
+                        
+                        <div class="status-indicator" id="binaries-status">
+                            <span class="badge badge-secondary">Pending</span>
+                        </div>
+                        
+                        <div class="form-group mt-3">
+                            <label>Oracle Home Path:</label>
+                            <input type="text" class="form-control" id="oracle-home" 
+                                   value="/u01/app/oracle/product/19.3.0/dbhome_1" placeholder="/u01/app/oracle/product/19.3.0/dbhome_1">
+                        </div>
+                        
+                        <button class="btn btn-primary btn-sm" onclick="installBinaries()" id="install-binaries-btn">
+                            <i class="fas fa-box"></i> Install Binaries
+                        </button>
+                    </div>
+
+                    <hr>
+
+                    <!-- Step 4: Create Database -->
+                    <div class="installation-step">
+                        <h4><span class="step-number">4</span> Create Database</h4>
+                        <p class="text-muted">Create your first Oracle database instance</p>
+                        
+                        <div class="status-indicator" id="database-status">
+                            <span class="badge badge-secondary">Pending</span>
+                        </div>
+                        
+                        <div class="form-group mt-3">
+                            <label>Database Name (SID):</label>
+                            <input type="text" class="form-control" id="db-name" 
+                                   value="ORCL" placeholder="ORCL">
+                        </div>
+                        
+                        <button class="btn btn-success btn-sm" onclick="createDatabase()" id="create-database-btn">
+                            <i class="fas fa-database"></i> Create Database
+                        </button>
+                    </div>
+
+                    <hr>
+
+                    <!-- Quick Install Option -->
+                    <div class="installation-step">
+                        <h4><i class="fas fa-bolt text-warning"></i> Quick Install (All Steps)</h4>
+                        <p class="text-muted">Run complete installation automatically (Steps 2-4)</p>
+                        
+                        <div class="alert alert-warning">
+                            <strong>Warning:</strong> This will take 30-60 minutes depending on your system.
+                            Make sure you have downloaded the Oracle software first.
+                        </div>
+                        
+                        <button class="btn btn-warning" onclick="fullInstall()">
+                            <i class="fas fa-rocket"></i> Full Installation
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Log -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-terminal"></i> Installation Log</h5>
+                </div>
+                <div class="card-body bg-dark text-light" style="max-height: 400px; overflow-y: auto;">
+                    <pre id="install-log" class="text-light mb-0">Ready to start installation...</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.installation-step {
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.step-number {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    text-align: center;
+    background: #007bff;
+    color: white;
+    border-radius: 50%;
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.status-indicator {
+    margin: 10px 0;
+}
+
+#install-log {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let installSocket = null;
+
+function log(message, type = 'info') {
+    const logEl = document.getElementById('install-log');
+    const timestamp = new Date().toLocaleTimeString();
+    const prefix = type === 'error' ? '❌' : type === 'success' ? '✓' : '→';
+    logEl.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function downloadFromGoogleDrive() {
+    log('Starting Google Drive download...', 'info');
+    
+    const statusDiv = document.getElementById('download-status');
+    statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Downloading LINUX.X64_193000_db_home.zip (3.06 GB)...</div>';
+    
+    try {
+        const response = await apiCall('/api/installation/download', {
+            method: 'POST',
+            body: JSON.stringify({ source: 'google_drive' })
+        });
+        
+        if (response.error) {
+            throw new Error(response.error);
+        }
+        
+        log(response.message, 'success');
+        statusDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> Download complete!</div>';
+    } catch (error) {
+        log(`Download failed: ${error.message}`, 'error');
+        statusDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${error.message}</div>`;
+    }
+}
+
+async function runPrecheck() {
+    log('Running system precheck...', 'info');
+    
+    try {
+        const response = await apiCall('/api/installation/precheck');
+        
+        const statusEl = document.getElementById('system-status');
+        
+        if (response.passed) {
+            log('System precheck passed!', 'success');
+            statusEl.innerHTML = '<span class="badge badge-success">Ready</span>';
+        } else {
+            log('System precheck found issues', 'error');
+            statusEl.innerHTML = '<span class="badge badge-warning">Issues Found</span>';
+            
+            for (const issue of response.issues) {
+                log(`  - ${issue}`, 'error');
+            }
+        }
+    } catch (error) {
+        log(`Precheck failed: ${error.message}`, 'error');
+    }
+}
+
+async function installSystem() {
+    if (!confirm('This will configure system users, groups, and kernel parameters. Continue?')) {
+        return;
+    }
+    
+    log('Installing system prerequisites...', 'info');
+    
+    const btn = document.getElementById('install-system-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
+    
+    try {
+        const response = await apiCall('/api/installation/system', {
+            method: 'POST'
+        });
+        
+        log(response.message || 'System prerequisites installed', 'success');
+        document.getElementById('system-status').innerHTML = '<span class="badge badge-success">Installed</span>';
+    } catch (error) {
+        log(`Installation failed: ${error.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-cogs"></i> Install System Prerequisites';
+    }
+}
+
+async function installBinaries() {
+    const oracleHome = document.getElementById('oracle-home').value;
+    
+    if (!oracleHome) {
+        alert('Please enter Oracle Home path');
+        return;
+    }
+    
+    if (!confirm(`Install Oracle binaries to ${oracleHome}? This may take 10-15 minutes.`)) {
+        return;
+    }
+    
+    log(`Installing Oracle binaries to ${oracleHome}...`, 'info');
+    
+    const btn = document.getElementById('install-binaries-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
+    
+    try {
+        const response = await apiCall('/api/installation/binaries', {
+            method: 'POST',
+            body: JSON.stringify({ oracle_home: oracleHome })
+        });
+        
+        log(response.message || 'Binaries installed successfully', 'success');
+        document.getElementById('binaries-status').innerHTML = '<span class="badge badge-success">Installed</span>';
+    } catch (error) {
+        log(`Installation failed: ${error.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-box"></i> Install Binaries';
+    }
+}
+
+async function createDatabase() {
+    const dbName = document.getElementById('db-name').value;
+    
+    if (!dbName) {
+        alert('Please enter database name');
+        return;
+    }
+    
+    if (!confirm(`Create database ${dbName}? This may take 15-30 minutes.`)) {
+        return;
+    }
+    
+    log(`Creating database ${dbName}...`, 'info');
+    
+    const btn = document.getElementById('create-database-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    
+    try {
+        const response = await apiCall('/api/installation/database', {
+            method: 'POST',
+            body: JSON.stringify({ db_name: dbName })
+        });
+        
+        log(response.message || 'Database created successfully', 'success');
+        document.getElementById('database-status').innerHTML = '<span class="badge badge-success">Created</span>';
+    } catch (error) {
+        log(`Creation failed: ${error.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-database"></i> Create Database';
+    }
+}
+
+async function fullInstall() {
+    if (!confirm('Run full installation (system + binaries + database)? This will take 30-60 minutes.')) {
+        return;
+    }
+    
+    log('Starting full installation...', 'info');
+    
+    try {
+        // System
+        log('Step 1/3: Installing system prerequisites...', 'info');
+        await installSystem();
+        
+        // Binaries
+        log('Step 2/3: Installing Oracle binaries...', 'info');
+        await installBinaries();
+        
+        // Database
+        log('Step 3/3: Creating database...', 'info');
+        await createDatabase();
+        
+        log('===== INSTALLATION COMPLETE =====', 'success');
+    } catch (error) {
+        log(`Full installation failed: ${error.message}`, 'error');
+    }
+}
+
+// Check installation status on page load
+window.addEventListener('load', async () => {
+    try {
+        const status = await apiCall('/api/installation-status');
+        
+        // Update status badges
+        if (status.components) {
+            const systemStatus = status.components.oracle_database && status.components.oracle_database.installed;
+            if (systemStatus) {
+                document.getElementById('system-status').innerHTML = '<span class="badge badge-success">Ready</span>';
+            }
+            
+            const binariesStatus = status.components.oracle_database && status.components.oracle_database.installed;
+            if (binariesStatus) {
+                document.getElementById('binaries-status').innerHTML = '<span class="badge badge-success">Installed</span>';
+            }
+            
+            const dbStatus = status.components.oracle_database && status.components.oracle_database.active;
+            if (dbStatus) {
+                document.getElementById('database-status').innerHTML = '<span class="badge badge-success">Running</span>';
+            }
+        }
+        
+        log('Installation status loaded', 'success');
+    } catch (error) {
+        log('Could not load installation status', 'error');
+    }
+});
+</script>
+{% endblock %}

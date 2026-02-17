@@ -133,6 +133,183 @@ def install_gui(port, host, debug):
 
 
 # ============================================================================
+# GUI SERVER MANAGEMENT
+# ============================================================================
+
+@main.group()
+def gui():
+    """🌐 Manage Web GUI Server"""
+    pass
+
+
+@gui.command('start')
+@click.option('--port', default=5000, help='Web server port (default: 5000)')
+@click.option('--host', default='0.0.0.0', help='Web server host (default: 0.0.0.0)')
+@click.option('--background', is_flag=True, help='Run in background (daemon mode)')
+def gui_start(port, host, background):
+    """Start the Web GUI server"""
+    import subprocess
+    import sys
+    import os
+    
+    # Check if already running
+    try:
+        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
+        if proc.returncode == 0:
+            console.print("[yellow]GUI server is already running[/yellow]")
+            console.print(f"[dim]PID: {proc.stdout.strip()}[/dim]")
+            return
+    except:
+        pass
+    
+    if background:
+        # Start in background
+        log_file = '/var/log/oracledba-gui.log'
+        console.print(f"\n[bold green]Starting GUI server in background...[/bold green]")
+        console.print(f"[cyan]URL:[/cyan] http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
+        console.print(f"[cyan]Log:[/cyan] {log_file}\n")
+        
+        # Use nohup to start in background
+        cmd = f"nohup oradba install gui --port {port} --host {host} > {log_file} 2>&1 &"
+        os.system(cmd)
+        
+        import time
+        time.sleep(2)
+        
+        # Verify it started
+        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
+        if proc.returncode == 0:
+            console.print(f"[green]✓ Server started successfully (PID: {proc.stdout.strip()})[/green]")
+        else:
+            console.print(f"[red]✗ Failed to start server. Check {log_file} for errors[/red]")
+    else:
+        # Start in foreground
+        console.print("\n[bold green]Starting OracleDBA Web GUI...[/bold green]\n")
+        console.print(f"[cyan]Access at:[/cyan] http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
+        console.print("[yellow]Default credentials: admin / admin123[/yellow]\n")
+        
+        try:
+            from .web_server import start_gui_server
+            start_gui_server(port=port, host=host, debug=False)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Server stopped[/yellow]")
+
+
+@gui.command('stop')
+def gui_stop():
+    """Stop the Web GUI server"""
+    import subprocess
+    
+    try:
+        # Find GUI process
+        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
+        
+        if proc.returncode != 0 or not proc.stdout.strip():
+            console.print("[yellow]GUI server is not running[/yellow]")
+            return
+        
+        pid = proc.stdout.strip()
+        console.print(f"\n[yellow]Stopping GUI server (PID: {pid})...[/yellow]")
+        
+        # Kill the process
+        subprocess.run(['pkill', '-f', 'oradba.*gui'], check=True)
+        
+        import time
+        time.sleep(1)
+        
+        # Verify it stopped
+        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
+        if proc.returncode != 0:
+            console.print("[green]✓ Server stopped successfully[/green]\n")
+        else:
+            console.print("[red]✗ Failed to stop server[/red]\n")
+            
+    except Exception as e:
+        console.print(f"[red]Error stopping server:[/red] {str(e)}\n")
+
+
+@gui.command('status')
+def gui_status():
+    """Check GUI server status"""
+    import subprocess
+    import requests
+    
+    console.print("\n[bold cyan]GUI Server Status[/bold cyan]\n")
+    
+    # Check if process is running
+    try:
+        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
+        
+        if proc.returncode == 0 and proc.stdout.strip():
+            pid = proc.stdout.strip()
+            console.print(f"[green]● Running[/green]")
+            console.print(f"  PID: {pid}")
+            
+            # Try to detect port
+            try:
+                port_proc = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True)
+                for line in port_proc.stdout.split('\n'):
+                    if pid in line and ':' in line:
+                        # Extract port
+                        import re
+                        match = re.search(r':(\d+)\s', line)
+                        if match:
+                            port = match.group(1)
+                            console.print(f"  Port: {port}")
+                            console.print(f"  URL: http://localhost:{port}")
+                            
+                            # Test connection
+                            try:
+                                resp = requests.get(f"http://localhost:{port}", timeout=2, allow_redirects=False)
+                                console.print(f"  Status: [green]Responding (HTTP {resp.status_code})[/green]")
+                            except:
+                                console.print(f"  Status: [yellow]Process running but not responding[/yellow]")
+                            break
+            except:
+                pass
+                
+        else:
+            console.print("[red]● Stopped[/red]")
+            console.print("  Start with: [cyan]oradba gui start --background[/cyan]")
+            
+    except Exception as e:
+        console.print(f"[red]Error checking status:[/red] {str(e)}")
+    
+    console.print()
+
+
+@gui.command('restart')
+@click.option('--port', default=5000, help='Web server port (default: 5000)')
+@click.option('--host', default='0.0.0.0', help='Web server host (default: 0.0.0.0)')
+def gui_restart(port, host):
+    """Restart the Web GUI server"""
+    console.print("\n[yellow]Restarting GUI server...[/yellow]\n")
+    
+    # Stop
+    import subprocess
+    subprocess.run(['pkill', '-f', 'oradba.*gui'], capture_output=True)
+    
+    import time
+    time.sleep(2)
+    
+    # Start
+    log_file = '/var/log/oracledba-gui.log'
+    cmd = f"nohup oradba install gui --port {port} --host {host} > {log_file} 2>&1 &"
+    import os
+    os.system(cmd)
+    
+    time.sleep(2)
+    
+    # Verify
+    proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
+    if proc.returncode == 0:
+        console.print(f"[green]✓ Server restarted successfully[/green]")
+        console.print(f"[cyan]URL:[/cyan] http://{host if host != '0.0.0.0' else 'localhost'}:{port}\n")
+    else:
+        console.print(f"[red]✗ Failed to restart server[/red]\n")
+
+
+# ============================================================================
 # PRE-INSTALLATION CHECK
 # ============================================================================
 

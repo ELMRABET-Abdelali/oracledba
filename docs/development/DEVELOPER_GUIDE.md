@@ -234,7 +234,7 @@ class Config:
 
 ```bash
 # 1. Cloner repository
-git clone https://github.com/yourusername/oracledba.git
+git clone https://github.com/ELMRABET-Abdelali/oracledba.git
 cd oracledba
 
 # 2. Créer virtualenv
@@ -452,9 +452,9 @@ main "$@"
 ```bash
 # Fork sur GitHub
 # Puis clone local
-git clone https://github.com/YOUR_USERNAME/oracledba.git
+git clone https://github.com/ELMRABET-Abdelali/oracledba.git
 cd oracledba
-git remote add upstream https://github.com/original/oracledba.git
+git remote add upstream https://github.com/ELMRABET-Abdelali/oracledba.git
 ```
 
 ### 2. Créer Branche Feature
@@ -762,8 +762,8 @@ def run_script_with_trace(script_path):
 
 ## 🤝 Questions ?
 
-- 💬 GitHub Discussions: https://github.com/yourusername/oracledba/discussions
-- 🐛 GitHub Issues: https://github.com/yourusername/oracledba/issues
+- 💬 GitHub Discussions: https://github.com/ELMRABET-Abdelali/oracledba/discussions
+- 🐛 GitHub Issues: https://github.com/ELMRABET-Abdelali/oracledba/issues
 - 📧 Email: dba@formation.com
 
 ---

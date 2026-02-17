@@ -12,10 +12,10 @@ from . import flashback
 from . import security
 from . import nfs
 from . import database
-from . import cluster
-from . import sample
-from . import help_system
-from . import system_detector
+from . import precheck
+from . import testing
+from . import downloader
+from . import response_files
 
 __all__ = [
     'install',
@@ -29,8 +29,8 @@ __all__ = [
     'security',
     'nfs',
     'database',
-    'cluster',
-    'sample',
-    'help_system',
-    'system_detector',
+    'precheck',
+    'testing',
+    'downloader',
+    'response_files',
 ]

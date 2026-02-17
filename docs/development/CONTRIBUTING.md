@@ -47,7 +47,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 ```bash
 # Clone your fork
-git clone https://github.com/yourusername/oracledba.git
+git clone https://github.com/ELMRABET-Abdelali/oracledba.git
 cd oracledba
 
 # Create virtual environment

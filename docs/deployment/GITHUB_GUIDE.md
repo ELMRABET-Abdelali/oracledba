@@ -31,7 +31,7 @@ git commit -m "Initial commit - OracleDBA v1.0.0"
 
 ```bash
 # Remplacer 'yourusername' par votre nom d'utilisateur GitHub
-git remote add origin https://github.com/yourusername/oracledba.git
+git remote add origin https://github.com/ELMRABET-Abdelali/oracledba.git
 
 # Pousser vers GitHub
 git branch -M main
@@ -61,7 +61,7 @@ cat ~/.ssh/id_ed25519.pub
 # GitHub → Settings → SSH and GPG keys → New SSH key
 
 # Changer l'URL remote pour SSH
-git remote set-url origin git@github.com:yourusername/oracledba.git
+git remote set-url origin git@github.com:ELMRABET-Abdelali/oracledba.git
 ```
 
 ## 📝 Workflow de développement

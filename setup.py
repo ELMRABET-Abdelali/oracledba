@@ -19,7 +19,7 @@ setup(
     description="Complete Oracle 19c DBA package with installation, backup, tuning, ASM, RAC and more",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/oracledba",
+    url="https://github.com/ELMRABET-Abdelali/oracledba",
     packages=find_packages(exclude=["tests", "docs"]),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -45,6 +45,10 @@ setup(
         "rich>=13.7.0",
         "paramiko>=3.4.0",
         "jinja2>=3.1.3",
+        "psutil>=5.9.0",
+        "gdown>=4.7.0",
+        "flask>=3.0.0",
+        "flask-cors>=4.0.0",
     ],
     extras_require={
         "dev": [
@@ -78,8 +82,8 @@ setup(
     },
     zip_safe=False,
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/oracledba/issues",
-        "Documentation": "https://github.com/yourusername/oracledba/wiki",
-        "Source": "https://github.com/yourusername/oracledba",
+        "Bug Reports": "https://github.com/ELMRABET-Abdelali/oracledba/issues",
+        "Documentation": "https://github.com/ELMRABET-Abdelali/oracledba/wiki",
+        "Source": "https://github.com/ELMRABET-Abdelali/oracledba",
     },
 )

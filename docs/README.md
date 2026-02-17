@@ -141,13 +141,39 @@ Comment contribuer au projet:
 ### 🚀 Déploiement
 
 #### [GitHub Publishing Guide](deployment/GITHUB_GUIDE.md)
-Guide complet pour publier le package:
+Guide complet pour publier le package sur GitHub:
 - Création repository GitHub
 - Configuration Git
 - Tagging et releases
-- Publication sur PyPI
 - CI/CD avec GitHub Actions
 - Documentation automatique
+
+#### [PyPI Publishing Guide](deployment/PYPI_GUIDE.md) 📝 **NOUVEAU**
+Guide détaillé étape par étape pour publier sur PyPI (30+ pages):
+- **Prérequis:** Création compte PyPI, configuration API tokens
+- **Build & Test:** Construction du package, validation avec twine
+- **Publication:** TestPyPI d'abord, puis Production
+- **Scripts automatisés:** Disponibles dans `../deployment-tools/` (en dehors du package)
+  - `publish.ps1` pour Windows PowerShell
+  - `publish.sh` pour Linux/Mac Bash
+- **Troubleshooting:** Résolution des erreurs courantes
+- **Versioning:** Mise à jour et nouvelles releases
+- **Badges PyPI** pour README
+
+**🎯 Les scripts de publication ne font PAS partie du package distribué.**
+
+**Usage Rapide (depuis deployment-tools/):**
+```bash
+# Windows PowerShell
+cd ..\deployment-tools
+.\publish.ps1 test   # Publier sur TestPyPI
+.\publish.ps1 prod   # Publier sur PyPI Production
+
+# Linux/Mac
+cd ../deployment-tools
+./publish.sh test    # Publier sur TestPyPI
+./publish.sh prod    # Publier sur PyPI Production
+```
 
 #### [Package Summary](deployment/PACKAGE_SUMMARY.md)
 Vue d'ensemble complète du package:
@@ -222,8 +248,8 @@ Vue d'ensemble complète du package:
    - Suivre [Contributing Guidelines](development/CONTRIBUTING.md)
 
 4. **Contact:**
-   - 🐛 Issues: [GitHub Issues](https://github.com/yourusername/oracledba/issues)
-   - 💬 Discussions: [GitHub Discussions](https://github.com/yourusername/oracledba/discussions)
+   - 🐛 Issues: [GitHub Issues](https://github.com/ELMRABET-Abdelali/oracledba/issues)
+   - 💬 Discussions: [GitHub Discussions](https://github.com/ELMRABET-Abdelali/oracledba/discussions)
 
 ---
 

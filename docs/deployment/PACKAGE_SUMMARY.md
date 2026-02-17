@@ -228,7 +228,7 @@ git add .
 git commit -m "Initial commit - OracleDBA v1.0.0"
 
 # Créer repo sur GitHub puis:
-git remote add origin https://github.com/VOTRE-USERNAME/oracledba.git
+git remote add origin https://github.com/ELMRABET-Abdelali/oracledba.git
 git branch -M main
 git push -u origin main
 
@@ -296,7 +296,7 @@ Recommandations :
 
 ```bash
 # 1. Télécharger le script d'installation
-curl -O https://raw.githubusercontent.com/VOTRE-USERNAME/oracledba/main/install.sh
+curl -O https://raw.githubusercontent.com/ELMRABET-Abdelali/oracledba/main/install.sh
 chmod +x install.sh
 
 # 2. Exécuter (en tant que root)

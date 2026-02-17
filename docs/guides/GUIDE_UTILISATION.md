@@ -41,7 +41,7 @@ Oracle: 19c Enterprise Edition
 
 ```bash
 # 1. Cloner le repository
-git clone https://github.com/votre-username/oracledba.git
+git clone https://github.com/ELMRABET-Abdelali/oracledba.git
 cd oracledba
 
 # 2. Installation avec pip (mode développement)
@@ -66,7 +66,7 @@ oradba --version
 
 ```bash
 # Télécharger et installer automatiquement
-curl -o install.sh https://raw.githubusercontent.com/votre-username/oracledba/main/install.sh
+curl -o install.sh https://raw.githubusercontent.com/ELMRABET-Abdelali/oracledba/main/install.sh
 chmod +x install.sh
 sudo ./install.sh
 
@@ -2122,8 +2122,8 @@ oradba tuning auto-tune --apply
 ## 📞 Support
 
 **Documentation:**
-- GitHub: https://github.com/votre-username/oracledba
-- Issues: https://github.com/votre-username/oracledba/issues
+- GitHub: https://github.com/ELMRABET-Abdelali/oracledba
+- Issues: https://github.com/ELMRABET-Abdelali/oracledba/issues
 
 **Exemples:**
 - Voir dossier `examples/` pour configurations type

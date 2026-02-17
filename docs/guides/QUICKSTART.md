@@ -7,7 +7,7 @@
 pip install oracledba
 
 # Ou depuis GitHub
-git clone https://github.com/yourusername/oracledba.git
+git clone https://github.com/ELMRABET-Abdelali/oracledba.git
 cd oracledba
 pip install -e .
 ```
@@ -266,8 +266,8 @@ SQL> ALTER TABLESPACE USERS ADD DATAFILE SIZE 1G;
 
 ## Support
 
-- Documentation: [GitHub Wiki](https://github.com/yourusername/oracledba/wiki)
-- Issues: [GitHub Issues](https://github.com/yourusername/oracledba/issues)
+- Documentation: [GitHub Wiki](https://github.com/ELMRABET-Abdelali/oracledba/wiki)
+- Issues: [GitHub Issues](https://github.com/ELMRABET-Abdelali/oracledba/issues)
 - Email: dba@formation.com
 
 ---

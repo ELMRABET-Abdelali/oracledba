@@ -6,6 +6,7 @@ Complete Oracle Database Administration Tool
 
 import os
 import sys
+import subprocess
 import click
 from rich.console import Console
 from rich.table import Table
@@ -14,14 +15,8 @@ from rich.panel import Panel
 
 console = Console()
 
-# Import modules
-from .modules import install
-from .modules import rman
-from .modules import dataguard
-from .modules import tuning
-from .modules import asm
-from .modules import rac
-from .modules import pdb
+# Note: module imports are lazy (inside command functions) to avoid
+# import errors when optional dependencies are not installed.
 from .modules import flashback
 from .modules import security
 from .modules import nfs
@@ -65,248 +60,377 @@ def show_banner():
 # INSTALLATION COMMANDS
 # ============================================================================
 
-@main.group()
-def install():
-    """📦 Install and configure Oracle Database"""
-    pass
+@main.group(invoke_without_command=True)
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
+@click.option('--all', 'run_all', is_flag=True, help='Install + run all TP labs (storage, security, RMAN, etc.)')
+@click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
+@click.pass_context
+def install(ctx, yes, run_all, config):
+    """📦 Install and configure Oracle Database
+
+    Run without subcommand for complete one-shot installation:
+      oradba install              # base install (TP01-04)
+      oradba install --yes        # skip confirmation
+      oradba install --yes --all  # install + all post-config TPs
+    """
+    ctx.ensure_object(dict)
+    ctx.obj['yes'] = yes
+    ctx.obj['config'] = config
+    if ctx.invoked_subcommand is None:
+        from .modules.install import InstallManager
+        mgr = InstallManager(config)
+        success = mgr.install_all(auto_yes=yes, run_all_tps=run_all)
+        sys.exit(0 if success else 1)
+
+
+@install.command('all')
+@click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
+@click.option('--skip-system', is_flag=True, help='Skip system setup')
+@click.option('--skip-binaries', is_flag=True, help='Skip binary installation')
+@click.option('--skip-db', is_flag=True, help='Skip database creation')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation')
+def install_all(config, skip_system, skip_binaries, skip_db, yes):
+    """🚀 Complete Oracle 19c installation from scratch"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.install_all(skip_system, skip_binaries, skip_db, auto_yes=yes)
+    sys.exit(0 if success else 1)
 
 
 @install.command('full')
 @click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
-@click.option('--skip-system', is_flag=True, help='Skip system setup')
-@click.option('--skip-binaries', is_flag=True, help='Skip binary installation')
-def install_full(config, skip_system, skip_binaries):
-    """Complete Oracle 19c installation"""
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation')
+def install_full(config, yes):
+    """🚀 ONE-BUTTON Complete Oracle 19c installation"""
     from .modules.install import InstallManager
     mgr = InstallManager(config)
-    mgr.install_full(skip_system, skip_binaries)
+    success = mgr.install_all(auto_yes=yes)
+    sys.exit(0 if success else 1)
 
 
 @install.command('system')
 @click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
 def install_system(config):
-    """Prepare system (users, groups, kernel params)"""
+    """Prepare system - users, groups, kernel params, packages"""
     from .modules.install import InstallManager
     mgr = InstallManager(config)
-    mgr.install_system()
+    success = mgr.install_system()
+    sys.exit(0 if success else 1)
 
 
 @install.command('binaries')
 @click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
 def install_binaries(config):
-    """Install Oracle binaries"""
+    """Download Oracle binaries - 3GB download from Google Drive"""
     from .modules.install import InstallManager
     mgr = InstallManager(config)
-    mgr.install_binaries()
+    success = mgr.install_binaries()
+    sys.exit(0 if success else 1)
+
+
+@install.command('software')
+@click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
+def install_software(config):
+    """Install Oracle software - runs runInstaller + root scripts"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.install_software()
+    sys.exit(0 if success else 1)
 
 
 @install.command('database')
 @click.option('--config', type=click.Path(exists=True), help='Configuration YAML file')
 @click.option('--name', help='Database name')
 def install_database(config, name):
-    """Create Oracle database"""
+    """Create Oracle database - runs DBCA with CDB/PDB"""
     from .modules.install import InstallManager
     mgr = InstallManager(config)
-    mgr.create_database(name)
+    success = mgr.create_database(name)
+    sys.exit(0 if success else 1)
 
 
 @install.command('gui')
-@click.option('--port', default=5000, help='Web server port (default: 5000)')
-@click.option('--host', default='0.0.0.0', help='Web server host (default: 0.0.0.0)')
-@click.option('--debug', is_flag=True, help='Enable debug mode')
-def install_gui(port, host, debug):
-    """🌐 Start Web GUI Management Console"""
+@click.option('--host', default='0.0.0.0', help='Host to bind (default: 0.0.0.0 for all interfaces)')
+@click.option('--port', default=5000, type=int, help='Port to listen on (default: 5000)')
+@click.option('--debug', is_flag=True, help='Run in debug mode')
+def install_gui(host, port, debug):
+    """🌐 Start Web GUI - Browser-based database management interface"""
     try:
-        from .web_server import start_gui_server
-        console.print("\n[bold green]Starting OracleDBA Web GUI...[/bold green]\n")
-        console.print(f"[cyan]Access the web interface at:[/cyan] [bold]http://{host}:{port}[/bold]")
-        console.print("[yellow]Default credentials: admin / admin123[/yellow]")
-        console.print("[dim]Press Ctrl+C to stop the server[/dim]\n")
-        start_gui_server(port=port, host=host, debug=debug)
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Server stopped[/yellow]")
+        from .web_server import app, config_manager
+        
+        # Update config with provided options
+        gui_config = config_manager.load_config()
+        gui_config['host'] = host
+        gui_config['port'] = port
+        gui_config['debug'] = debug
+        config_manager.save_config(gui_config)
+        
+        console.print("\n[bold green]🌐 Starting OracleDBA Web GUI...[/bold green]\n")
+        console.print(f"[cyan]→ URL:[/cyan] http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
+        console.print(f"[cyan]→ Default credentials:[/cyan] admin / admin123")
+        console.print(f"[yellow]⚠️  You will be forced to change password on first login[/yellow]\n")
+        
+        # Start Flask server
+        app.run(host=host, port=port, debug=debug)
+        
     except ImportError as e:
-        console.print(f"\n[red]Error: Missing dependencies for web GUI[/red]")
-        console.print("[yellow]Install with:[/yellow] [cyan]pip install flask flask-cors[/cyan]\n")
+        console.print("[bold red]❌ Web GUI dependencies not installed![/bold red]")
+        console.print(f"[dim]Error: {e}[/dim]")
+        console.print("\n[yellow]Fix with:[/yellow]")
+        console.print("[cyan]pip3 install --upgrade pip && pip3 install flask flask-cors[/cyan]\n")
+        sys.exit(1)
     except Exception as e:
-        console.print(f"\n[red]Error starting web server:[/red] {str(e)}\n")
+        console.print(f"[bold red]❌ Error starting web server:[/bold red] {e}")
+        sys.exit(1)
+
+
+@install.command('check')
+def install_check():
+    """🔍 Check what's installed - detect Oracle, database, listener status"""
+    console.print("\n[bold cyan]Oracle Installation Status Check[/bold cyan]\n")
+    
+    checks = {}
+    
+    # Check oracle user
+    try:
+        result = subprocess.run(['id', 'oracle'], capture_output=True, text=True)
+        checks['oracle_user'] = result.returncode == 0
+    except:
+        checks['oracle_user'] = False
+    
+    # Check ORACLE_HOME exists
+    oracle_home = os.environ.get('ORACLE_HOME', '/u01/app/oracle/product/19.3.0/dbhome_1')
+    checks['oracle_home_exists'] = os.path.exists(oracle_home)
+    
+    # Check Oracle binaries
+    checks['sqlplus'] = os.path.exists(os.path.join(oracle_home, 'bin', 'sqlplus'))
+    checks['lsnrctl'] = os.path.exists(os.path.join(oracle_home, 'bin', 'lsnrctl'))
+    checks['dbca'] = os.path.exists(os.path.join(oracle_home, 'bin', 'dbca'))
+    
+    # Check running processes
+    try:
+        result = subprocess.run(['ps', '-ef'], capture_output=True, text=True)
+        ps_output = result.stdout
+        checks['db_running'] = 'ora_pmon_' in ps_output
+        checks['listener_running'] = 'tnslsnr' in ps_output
+        
+        # Get running SIDs
+        running_sids = [line.split('ora_pmon_')[1].strip() for line in ps_output.split('\n') if 'ora_pmon_' in line]
+        checks['running_sids'] = running_sids
+    except:
+        checks['db_running'] = False
+        checks['listener_running'] = False
+        checks['running_sids'] = []
+    
+    # Check /etc/oratab
+    checks['oratab'] = os.path.exists('/etc/oratab')
+    
+    # Display results
+    table = Table(title="Installation Detection", show_header=True, header_style="bold magenta")
+    table.add_column("Component", style="white")
+    table.add_column("Status", style="white")
+    table.add_column("Details", style="dim")
+    
+    def status_icon(val):
+        return "[green]✓ YES[/green]" if val else "[red]✗ NO[/red]"
+    
+    table.add_row("Oracle User", status_icon(checks['oracle_user']), "id oracle")
+    table.add_row("ORACLE_HOME", status_icon(checks['oracle_home_exists']), oracle_home)
+    table.add_row("sqlplus Binary", status_icon(checks['sqlplus']), f"{oracle_home}/bin/sqlplus")
+    table.add_row("lsnrctl Binary", status_icon(checks['lsnrctl']), f"{oracle_home}/bin/lsnrctl")
+    table.add_row("DBCA Binary", status_icon(checks['dbca']), f"{oracle_home}/bin/dbca")
+    table.add_row("Database Running", status_icon(checks['db_running']), 
+                  ', '.join(checks.get('running_sids', [])) or 'No instances')
+    table.add_row("Listener Running", status_icon(checks['listener_running']), "tnslsnr process")
+    table.add_row("/etc/oratab", status_icon(checks['oratab']), "Database registry")
+    
+    console.print(table)
+    
+    # Recommendations
+    console.print("\n[bold cyan]Recommendations:[/bold cyan]")
+    if not checks['oracle_user']:
+        console.print("  [yellow]→ Run:[/yellow] oradba install system  [dim](TP01: create oracle user & groups)[/dim]")
+    elif not checks['sqlplus']:
+        console.print("  [yellow]→ Run:[/yellow] oradba install binaries  [dim](TP02: download & extract Oracle 19c)[/dim]")
+    elif not checks['db_running']:
+        console.print("  [yellow]→ Run:[/yellow] oradba install database  [dim](TP03: create database with DBCA)[/dim]")
+    else:
+        console.print("  [green]✓ Oracle 19c is fully installed and running![/green]")
+        console.print("  [dim]Next steps: oradba configure multiplexing | oradba configure storage | oradba install gui[/dim]")
+    
+    console.print("")
 
 
 # ============================================================================
-# GUI SERVER MANAGEMENT
+# CONFIGURATION COMMANDS
 # ============================================================================
 
 @main.group()
-def gui():
-    """🌐 Manage Web GUI Server"""
+def configure():
+    """⚙️  Configure Oracle Database features"""
     pass
 
 
-@gui.command('start')
-@click.option('--port', default=5000, help='Web server port (default: 5000)')
-@click.option('--host', default='0.0.0.0', help='Web server host (default: 0.0.0.0)')
-@click.option('--background', is_flag=True, help='Run in background (daemon mode)')
-def gui_start(port, host, background):
-    """Start the Web GUI server"""
-    import subprocess
-    import sys
-    import os
-    
-    # Check if already running
-    try:
-        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
-        if proc.returncode == 0:
-            console.print("[yellow]GUI server is already running[/yellow]")
-            console.print(f"[dim]PID: {proc.stdout.strip()}[/dim]")
-            return
-    except:
-        pass
-    
-    if background:
-        # Start in background
-        log_file = '/var/log/oracledba-gui.log'
-        console.print(f"\n[bold green]Starting GUI server in background...[/bold green]")
-        console.print(f"[cyan]URL:[/cyan] http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
-        console.print(f"[cyan]Log:[/cyan] {log_file}\n")
-        
-        # Use nohup to start in background
-        cmd = f"nohup oradba install gui --port {port} --host {host} > {log_file} 2>&1 &"
-        os.system(cmd)
-        
-        import time
-        time.sleep(2)
-        
-        # Verify it started
-        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
-        if proc.returncode == 0:
-            console.print(f"[green]✓ Server started successfully (PID: {proc.stdout.strip()})[/green]")
-        else:
-            console.print(f"[red]✗ Failed to start server. Check {log_file} for errors[/red]")
-    else:
-        # Start in foreground
-        console.print("\n[bold green]Starting OracleDBA Web GUI...[/bold green]\n")
-        console.print(f"[cyan]Access at:[/cyan] http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
-        console.print("[yellow]Default credentials: admin / admin123[/yellow]\n")
-        
-        try:
-            from .web_server import start_gui_server
-            start_gui_server(port=port, host=host, debug=False)
-        except KeyboardInterrupt:
-            console.print("\n[yellow]Server stopped[/yellow]")
+@configure.command('multiplexing')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def configure_multiplexing(config):
+    """Multiplex critical files - control files and redo logs"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('04')
+    sys.exit(0 if success else 1)
 
 
-@gui.command('stop')
-def gui_stop():
-    """Stop the Web GUI server"""
-    import subprocess
-    
-    try:
-        # Find GUI process
-        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
-        
-        if proc.returncode != 0 or not proc.stdout.strip():
-            console.print("[yellow]GUI server is not running[/yellow]")
-            return
-        
-        pid = proc.stdout.strip()
-        console.print(f"\n[yellow]Stopping GUI server (PID: {pid})...[/yellow]")
-        
-        # Kill the process
-        subprocess.run(['pkill', '-f', 'oradba.*gui'], check=True)
-        
-        import time
-        time.sleep(1)
-        
-        # Verify it stopped
-        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
-        if proc.returncode != 0:
-            console.print("[green]✓ Server stopped successfully[/green]\n")
-        else:
-            console.print("[red]✗ Failed to stop server[/red]\n")
-            
-    except Exception as e:
-        console.print(f"[red]Error stopping server:[/red] {str(e)}\n")
+@configure.command('storage')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def configure_storage(config):
+    """Configure storage - tablespaces, datafiles, quotas"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('05')
+    sys.exit(0 if success else 1)
 
 
-@gui.command('status')
-def gui_status():
-    """Check GUI server status"""
-    import subprocess
-    import requests
-    
-    console.print("\n[bold cyan]GUI Server Status[/bold cyan]\n")
-    
-    # Check if process is running
-    try:
-        proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
-        
-        if proc.returncode == 0 and proc.stdout.strip():
-            pid = proc.stdout.strip()
-            console.print(f"[green]● Running[/green]")
-            console.print(f"  PID: {pid}")
-            
-            # Try to detect port
-            try:
-                port_proc = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True)
-                for line in port_proc.stdout.split('\n'):
-                    if pid in line and ':' in line:
-                        # Extract port
-                        import re
-                        match = re.search(r':(\d+)\s', line)
-                        if match:
-                            port = match.group(1)
-                            console.print(f"  Port: {port}")
-                            console.print(f"  URL: http://localhost:{port}")
-                            
-                            # Test connection
-                            try:
-                                resp = requests.get(f"http://localhost:{port}", timeout=2, allow_redirects=False)
-                                console.print(f"  Status: [green]Responding (HTTP {resp.status_code})[/green]")
-                            except:
-                                console.print(f"  Status: [yellow]Process running but not responding[/yellow]")
-                            break
-            except:
-                pass
-                
-        else:
-            console.print("[red]● Stopped[/red]")
-            console.print("  Start with: [cyan]oradba gui start --background[/cyan]")
-            
-    except Exception as e:
-        console.print(f"[red]Error checking status:[/red] {str(e)}")
-    
-    console.print()
+@configure.command('users')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def configure_users(config):
+    """Configure security - users, roles, profiles, privileges"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('06')
+    sys.exit(0 if success else 1)
 
 
-@gui.command('restart')
-@click.option('--port', default=5000, help='Web server port (default: 5000)')
-@click.option('--host', default='0.0.0.0', help='Web server host (default: 0.0.0.0)')
-def gui_restart(port, host):
-    """Restart the Web GUI server"""
-    console.print("\n[yellow]Restarting GUI server...[/yellow]\n")
-    
-    # Stop
-    import subprocess
-    subprocess.run(['pkill', '-f', 'oradba.*gui'], capture_output=True)
-    
-    import time
-    time.sleep(2)
-    
-    # Start
-    log_file = '/var/log/oracledba-gui.log'
-    cmd = f"nohup oradba install gui --port {port} --host {host} > {log_file} 2>&1 &"
-    import os
-    os.system(cmd)
-    
-    time.sleep(2)
-    
-    # Verify
-    proc = subprocess.run(['pgrep', '-f', 'oradba.*gui'], capture_output=True, text=True)
-    if proc.returncode == 0:
-        console.print(f"[green]✓ Server restarted successfully[/green]")
-        console.print(f"[cyan]URL:[/cyan] http://{host if host != '0.0.0.0' else 'localhost'}:{port}\n")
-    else:
-        console.print(f"[red]✗ Failed to restart server[/red]\n")
+@configure.command('flashback')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def configure_flashback(config):
+    """Setup Flashback - query, table, and database recovery"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('07')
+    sys.exit(0 if success else 1)
+
+
+@configure.command('backup')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def configure_backup(config):
+    """Setup RMAN backup strategy"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('08')
+    sys.exit(0 if success else 1)
+
+
+@configure.command('dataguard')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def configure_dataguard(config):
+    """Setup Data Guard for high availability"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('09')
+    sys.exit(0 if success else 1)
+
+
+@configure.command('all')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def configure_all(config):
+    """Run all post-installation configuration steps"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_all_labs(start_from='04', end_at='09')
+    sys.exit(0 if success else 1)
+
+
+# ============================================================================
+# MAINTENANCE COMMANDS
+# ============================================================================
+
+@main.group()
+def maintenance():
+    """🔧 Database maintenance operations"""
+    pass
+
+
+@maintenance.command('tune')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def maintenance_tune(config):
+    """Performance tuning - AWR, SQL optimization"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('10')
+    sys.exit(0 if success else 1)
+
+
+@maintenance.command('patch')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def maintenance_patch(config):
+    """Apply Oracle patches and updates"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('11')
+    sys.exit(0 if success else 1)
+
+
+# ============================================================================
+# ADVANCED FEATURES
+# ============================================================================
+
+@main.group()
+def advanced():
+    """🚀 Advanced Oracle features"""
+    pass
+
+
+@advanced.command('multitenant')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def advanced_multitenant(config):
+    """Configure multitenant architecture - CDB/PDB management"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('12')
+    sys.exit(0 if success else 1)
+
+
+@advanced.command('ai-ml')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def advanced_ai_ml(config):
+    """Setup Oracle AI and Machine Learning features"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('13')
+    sys.exit(0 if success else 1)
+
+
+@advanced.command('data-mobility')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def advanced_data_mobility(config):
+    """Data mobility - Data Pump, transportable tablespaces"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('14')
+    sys.exit(0 if success else 1)
+
+
+@advanced.command('asm-rac')
+@click.option('--config', type=click.Path(exists=True), help='Configuration file')
+def advanced_asm_rac(config):
+    """Setup ASM and RAC clustering concepts"""
+    from .modules.install import InstallManager
+    mgr = InstallManager(config)
+    success = mgr.run_lab('15')
+    sys.exit(0 if success else 1)
+
+
+# ============================================================================
+# LABS LIST COMMAND
+# ============================================================================
+
+@main.command('labs')
+def labs_list():
+    """📚 List all available configuration and advanced labs"""
+    from .modules.install import InstallManager
+    mgr = InstallManager()
+    mgr.list_labs()
 
 
 # ============================================================================
@@ -420,8 +544,8 @@ def genrsp_db(config, output):
         with open(config) as f:
             cfg = yaml.safe_load(f).get('oracle', {})
     
-    _, actual_file = generate_response_file('DB_INSTALL', cfg, output)
-    console.print(f"[green]✓[/green] Generated: {actual_file}")
+    generate_response_file('DB_INSTALL', cfg, output)
+    console.print(f"[green]✓[/green] Generated: {output}")
 
 
 @genrsp.command('dbca')
@@ -437,8 +561,8 @@ def genrsp_dbca(config, output):
         with open(config) as f:
             cfg = yaml.safe_load(f).get('database', {})
     
-    _, actual_file = generate_response_file('DBCA', cfg, output)
-    console.print(f"[green]✓[/green] Generated: {actual_file}")
+    generate_response_file('DBCA', cfg, output)
+    console.print(f"[green]✓[/green] Generated: {output}")
 
 
 # ============================================================================
@@ -975,342 +1099,6 @@ def vm_init(role, node_number):
     from .modules.install import InstallManager
     mgr = InstallManager()
     mgr.vm_init(role, node_number)
-
-
-# ============================================================================
-# CLUSTER MANAGEMENT
-# ============================================================================
-
-@main.group()
-def cluster():
-    """🖧  Manage multi-node Oracle cluster"""
-    pass
-
-
-@cluster.command('add-node')
-@click.option('--name', required=True, help='Node name (e.g., node1, node2)')
-@click.option('--ip', required=True, help='IP address')
-@click.option('--role', type=click.Choice(['database', 'nfs', 'grid', 'standby']), default='database', help='Node role')
-@click.option('--ssh-key', help='Path to SSH private key')
-@click.option('--ssh-user', default='root', help='SSH username')
-@click.option('--sid', help='Oracle SID for database nodes')
-def cluster_add_node(name, ip, role, ssh_key, ssh_user, sid):
-    """Add a node to the cluster"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    mgr.add_node(name, ip, role, ssh_key, ssh_user, sid)
-
-
-@cluster.command('remove-node')
-@click.argument('name')
-@click.option('--force', is_flag=True, help='Skip confirmation')
-def cluster_remove_node(name, force):
-    """Remove a node from the cluster"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    mgr.remove_node(name, force)
-
-
-@cluster.command('list')
-@click.option('--role', type=click.Choice(['database', 'nfs', 'grid', 'standby']), help='Filter by role')
-def cluster_list(role):
-    """List all nodes in the cluster"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    mgr.list_nodes(role)
-
-
-@cluster.command('show')
-@click.argument('name')
-def cluster_show(name):
-    """Show detailed information about a node"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    mgr.show_node(name)
-
-
-@cluster.command('add-nfs')
-@click.option('--name', required=True, help='NFS server name')
-@click.option('--ip', required=True, help='IP address')
-@click.option('--exports', required=True, help='Export paths (comma-separated, e.g., /nfs/backup,/nfs/fra)')
-@click.option('--ssh-key', help='Path to SSH private key')
-def cluster_add_nfs(name, ip, exports, ssh_key):
-    """Add NFS server to the cluster"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    export_paths = [p.strip() for p in exports.split(',')]
-    mgr.add_nfs_server(name, ip, export_paths, ssh_key)
-
-
-@cluster.command('mount-nfs')
-@click.option('--node', required=True, help='Database node name')
-@click.option('--nfs-server', required=True, help='NFS server name')
-@click.option('--remote-path', required=True, help='Remote path on NFS (e.g., /nfs/backup)')
-@click.option('--mount-point', required=True, help='Local mount point (e.g., /backup)')
-def cluster_mount_nfs(node, nfs_server, remote_path, mount_point):
-    """Configure NFS mount between node and NFS server"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    mgr.mount_nfs(node, nfs_server, remote_path, mount_point)
-
-
-@cluster.command('deploy')
-@click.argument('node_name')
-def cluster_deploy(node_name):
-    """Deploy OracleDBA package on a node"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    mgr.deploy_oracledba(node_name)
-
-
-@cluster.command('ssh')
-@click.argument('node_name')
-@click.argument('command', nargs=-1, required=True)
-def cluster_ssh(node_name, command):
-    """Execute command on a node via SSH"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    cmd = ' '.join(command)
-    exit_code, stdout, stderr = mgr.ssh_exec(node_name, cmd)
-    
-    if stdout:
-        console.print(stdout)
-    if stderr:
-        console.print(f"[red]{stderr}[/red]", style="bold")
-    
-    sys.exit(exit_code)
-
-
-@cluster.command('export')
-@click.option('--format', type=click.Choice(['yaml', 'ansible', 'terraform']), default='yaml', help='Export format')
-def cluster_export(format):
-    """Export cluster inventory"""
-    from .modules.cluster import ClusterManager
-    mgr = ClusterManager()
-    output_file = mgr.export_inventory(format)
-    console.print(f"\n[green]✓[/green] Inventory exported: {output_file}")
-
-
-# ============================================================================
-# SAMPLE DATABASE COMMANDS
-# ============================================================================
-
-@main.group()
-def sample():
-    """🧪 Sample database for testing and learning"""
-    pass
-
-
-@sample.command('create')
-@click.option('--name', default='SAMPLEDB', help='Sample database name')
-def sample_create(name):
-    """Create fully configured sample database with test data"""
-    from .modules.sample import SampleDatabaseGenerator
-    console.print("[bold cyan]Creating sample database...[/bold cyan]")
-    console.print("[dim]This includes: tables, data, indexes, security, backups, flashback[/dim]\n")
-    
-    generator = SampleDatabaseGenerator(name)
-    success = generator.run_full_setup()
-    
-    if success:
-        console.print("\n[bold green]✓ Sample database ready![/bold green]")
-        console.print("\n[cyan]Try these commands:[/cyan]")
-        console.print("  oradba sample status       # View configuration")
-        console.print("  oradba sample test         # Test all features")
-        console.print("  oradba sample connect      # Get connection string")
-    else:
-        console.print("\n[bold red]✗ Sample database creation failed[/bold red]")
-        sys.exit(1)
-
-
-@sample.command('status')
-@click.option('--name', default='SAMPLEDB', help='Sample database name')
-def sample_status(name):
-    """Show sample database configuration and statistics"""
-    from .modules.sample import SampleDatabaseGenerator
-    generator = SampleDatabaseGenerator(name)
-    generator.show_status()
-
-
-@sample.command('test')
-@click.option('--name', default='SAMPLEDB', help='Sample database name')
-@click.option('--feature', help='Test specific feature (archivelog, rman, flashback, security)')
-def sample_test(name, feature):
-    """Test sample database features"""
-    console.print(f"\n[bold cyan]Testing sample database: {name}[/bold cyan]\n")
-    
-    tests = {
-        'connection': {
-            'name': 'Database Connection',
-            'sql': "SELECT 'Connected to ' || instance_name FROM v$instance;"
-        },
-        'archivelog': {
-            'name': 'Archive Log Mode',
-            'sql': "SELECT log_mode FROM v$database;"
-        },
-        'fra': {
-            'name': 'Fast Recovery Area',
-            'sql': "SELECT name, value FROM v$parameter WHERE name LIKE '%recovery_file_dest%';"
-        },
-        'controlfiles': {
-            'name': 'Control File Multiplexing',
-            'sql': "SELECT COUNT(*) as multiplexed_copies FROM v$controlfile;"
-        },
-        'redologs': {
-            'name': 'Redo Log Multiplexing',
-            'sql': "SELECT group#, COUNT(*) as members FROM v$logfile GROUP BY group#;"
-        },
-        'flashback': {
-            'name': 'Flashback Database',
-            'sql': "SELECT flashback_on FROM v$database;"
-        },
-        'sample_data': {
-            'name': 'Sample Data',
-            'sql': "SELECT 'Customers: ' || COUNT(*) FROM sample_user.customers UNION ALL SELECT 'Orders: ' || COUNT(*) FROM sample_user.orders;"
-        },
-        'security': {
-            'name': 'Security Profile',
-            'sql': "SELECT username, profile FROM dba_users WHERE username = 'SAMPLE_USER';"
-        }
-    }
-    
-    if feature:
-        if feature not in tests:
-            console.print(f"[red]Unknown feature: {feature}[/red]")
-            console.print("[yellow]Available:[/yellow] " + ", ".join(tests.keys()))
-            sys.exit(1)
-        tests_to_run = {feature: tests[feature]}
-    else:
-        tests_to_run = tests
-    
-    all_passed = True
-    for test_id, test_info in tests_to_run.items():
-        console.print(f"[cyan]Testing:[/cyan] {test_info['name']}")
-        
-        # Execute test SQL
-        import subprocess
-        import tempfile
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False) as f:
-            f.write(f"SET FEEDBACK OFF\n")
-            f.write(f"SET HEADING OFF\n")
-            f.write(f"{test_info['sql']}\n")
-            f.write("EXIT;\n")
-            sql_file = f.name
-        
-        try:
-            result = subprocess.run(
-                ['sqlplus', '-S', '/', 'as', 'sysdba', f'@{sql_file}'],
-                capture_output=True,
-                text=True
-            )
-            
-            if result.returncode == 0 and result.stdout.strip():
-                console.print(f"  [green]✓ PASS[/green] - {result.stdout.strip()}")
-            else:
-                console.print(f"  [red]✗ FAIL[/red]")
-                all_passed = False
-        except Exception as e:
-            console.print(f"  [red]✗ ERROR:[/red] {e}")
-            all_passed = False
-        finally:
-            os.unlink(sql_file)
-    
-    if all_passed:
-        console.print("\n[bold green]✓ All tests passed![/bold green]")
-    else:
-        console.print("\n[bold red]✗ Some tests failed[/bold red]")
-        sys.exit(1)
-
-
-@sample.command('connect')
-@click.option('--name', default='SAMPLEDB', help='Sample database name')
-@click.option('--user', default='sample_user', help='User name')
-def sample_connect(name, user):
-    """Show connection string for sample database"""
-    console.print(f"\n[bold cyan]Sample Database Connection Info[/bold cyan]\n")
-    
-    console.print("[yellow]SQL*Plus:[/yellow]")
-    console.print(f"  sqlplus {user}/SamplePass123@{name}")
-    
-    console.print("\n[yellow]JDBC:[/yellow]")
-    console.print(f"  jdbc:oracle:thin:@localhost:1521:{name}")
-    
-    console.print("\n[yellow]Python (cx_Oracle):[/yellow]")
-    console.print(f"  cx_Oracle.connect('{user}', 'SamplePass123', 'localhost:1521/{name}')")
-    
-    console.print("\n[yellow]TNS:[/yellow]")
-    console.print(f"  {name} = (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME={name})))\n")
-
-
-@sample.command('remove')
-@click.option('--name', default='SAMPLEDB', help='Sample database name')
-@click.option('--force', is_flag=True, help='Skip confirmation')
-def sample_remove(name, force):
-    """Remove sample database and all data"""
-    if not force:
-        console.print(f"\n[bold red]WARNING:[/bold red] This will DELETE sample database '{name}' and ALL DATA")
-        confirm = input("Type 'yes' to confirm: ")
-        if confirm != 'yes':
-            console.print("[yellow]Cancelled[/yellow]")
-            return
-    
-    from .modules.sample import SampleDatabaseGenerator
-    generator = SampleDatabaseGenerator(name)
-    success = generator.cleanup()
-    
-    if success:
-        console.print(f"\n[green]✓ Sample database '{name}' removed[/green]")
-    else:
-        console.print(f"\n[red]✗ Failed to remove sample database[/red]")
-        sys.exit(1)
-
-
-# ============================================================================
-# ENHANCED HELP SYSTEM
-# ============================================================================
-
-@main.group()
-def help():
-    """📚 Comprehensive help and documentation"""
-    pass
-
-
-@help.command('features')
-def help_features():
-    """List all Oracle features with descriptions"""
-    from .modules.help_system import show_all_features
-    show_all_features()
-
-
-@help.command('feature')
-@click.argument('feature_name')
-def help_feature(feature_name):
-    """Show detailed help for specific feature"""
-    from .modules.help_system import show_feature_detail
-    show_feature_detail(feature_name)
-
-
-@help.command('workflow')
-def help_workflow():
-    """Show recommended production setup workflow"""
-    from .modules.help_system import show_workflow_guide
-    show_workflow_guide()
-
-
-@help.command('search')
-@click.argument('keyword')
-def help_search(keyword):
-    """Search features by keyword"""
-    from .modules.help_system import search_features
-    search_features(keyword)
-
-
-@help.command('quick')
-def help_quick():
-    """Quick command reference (one-liners)"""
-    from .modules.help_system import show_quick_reference
-    show_quick_reference()
 
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ Guide de référence rapide pour toutes les commandes oradba essentielles.
 
 ```bash
 # Depuis GitHub
-git clone https://github.com/yourusername/oracledba.git && cd oracledba && pip install -e .
+git clone https://github.com/ELMRABET-Abdelali/oracledba.git && cd oracledba && pip install -e .
 
 # Depuis PyPI
 pip install oracledba
@@ -758,8 +758,8 @@ SQL> SELECT name, open_mode FROM v$database;
 
 ## 🔗 Liens Utiles
 
-- **GitHub:** https://github.com/yourusername/oracledba
-- **Issues:** https://github.com/yourusername/oracledba/issues
+- **GitHub:** https://github.com/ELMRABET-Abdelali/oracledba
+- **Issues:** https://github.com/ELMRABET-Abdelali/oracledba/issues
 - **Oracle Docs:** https://docs.oracle.com/en/database/oracle/oracle-database/19/
 
 ---
